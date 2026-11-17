@@ -9,7 +9,7 @@ Original stereo granular processor plugin (VST3 / AU) built with JUCE and CMake.
 | Platform | Runner | Toolchain | Output |
 | --- | --- | --- | --- |
 | Windows x64 | `windows-2022` | Visual Studio 2022 (MSVC), Release | `Grainveil-VST3-Windows-x64.zip` |
-| macOS universal (Intel + Apple Silicon) | `macos-14` | Apple Clang / Xcode, Release | `Grainveil-VST3-macOS-universal.zip` (+ `Grainveil-AU-macOS-universal.zip`) |
+| macOS universal (Intel + Apple Silicon) | `macos-15` | Apple Clang / Xcode, Release | `Grainveil-VST3-macOS-universal.zip` (+ `Grainveil-AU-macOS-universal.zip`) |
 
 Start a build with **Actions → Build plugins (Windows / macOS) → Run workflow**, or push a
 `v*` tag. Manual runs also publish a GitHub **Release** containing all three ZIP archives;
@@ -17,7 +17,8 @@ every run additionally keeps the archives as downloadable workflow artefacts for
 The macOS build is a single universal binary (`x86_64;arm64`, deployment target 11.0) and
 is ad-hoc code signed.
 
-Installation: unzip and copy `Grainveil.vst3` into
+Installation: unzip and copy the whole `Grainveil.vst3` bundle (on Windows JUCE 8
+produces a folder `Contents/x86_64-win/Grainveil.vst3`, not a single DLL) into
 `C:\Program Files\Common Files\VST3\` (Windows) or
 `~/Library/Audio/Plug-Ins/VST3/` (macOS). The binaries are not notarized: on macOS run
 `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/Grainveil.vst3` before

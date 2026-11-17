@@ -27,7 +27,9 @@ jobs:
           - runner: windows-2022
             label: Windows x64 (VST3)
             artifact: Grainveil-Windows-x64
-          - runner: macos-14
+          # macos-14 was retired by GitHub in November 2026; macos-15 (Xcode 16)
+          # still cross-compiles the x86_64 slice of the universal binary.
+          - runner: macos-15
             label: macOS universal (VST3 + AU)
             artifact: Grainveil-macOS-universal
 
@@ -72,13 +74,23 @@ jobs:
           $vst3 = 'build/Grainveil_artefacts/Release/VST3/Grainveil.vst3'
           if (-not (Test-Path -LiteralPath $vst3)) { throw "VST3 not found at $vst3" }
           $item = Get-Item -LiteralPath $vst3
-          $bytes = [System.IO.File]::ReadAllBytes($item.FullName)
-          if ($bytes.Length -lt 64 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
-            throw "VST3 does not look like a PE binary (missing MZ header)"
+          # JUCE 8 emits a VST3 *bundle* on Windows: Grainveil.vst3/Contents/x86_64-win/Grainveil.vst3
+          # Older versions emitted a single PE file directly, so support both layouts.
+          if ($item.PSIsContainer) {
+            $inner = Get-ChildItem -LiteralPath $vst3 -Recurse -File -Filter '*.vst3' | Select-Object -First 1
+            if ($null -eq $inner) { throw "VST3 bundle contains no .vst3 binary" }
+            $binaryPath = $inner.FullName
+            Get-ChildItem -LiteralPath $vst3 -Recurse | Select-Object FullName, Length
+          } else {
+            $binaryPath = $item.FullName
           }
-          "Grainveil.vst3 : $($item.Length) bytes (PE/MZ OK)"
+          $bytes = [System.IO.File]::ReadAllBytes($binaryPath)
+          if ($bytes.Length -lt 64 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+            throw "VST3 does not look like a PE binary (missing MZ header): $binaryPath"
+          }
+          "PE binary: $binaryPath ($($bytes.Length) bytes, MZ header OK)"
           New-Item -ItemType Directory -Force -Path packages | Out-Null
-          Compress-Archive -LiteralPath $vst3 -DestinationPath 'packages/Grainveil-VST3-Windows-x64.zip' -Force
+          Compress-Archive -LiteralPath $item.FullName -DestinationPath 'packages/Grainveil-VST3-Windows-x64.zip' -Force
           Get-FileHash -Algorithm SHA256 'packages/Grainveil-VST3-Windows-x64.zip' | Format-List
 
       - name: Package and verify (macOS)
