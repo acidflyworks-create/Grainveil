@@ -30,6 +30,30 @@ the first scan, and allow the plugin in System Settings if Gatekeeper asks.
 После запуска workflow архивы с `.vst3` появляются на вкладке **Releases** и в артефактах
 запуска. Локально из Linux собрать эти два формата нельзя — нужен MSVC и Xcode/macOS SDK.
 
+## Editor foundation (redesign stage A)
+
+The current editor uses a 1000 × 620 logical design grid. User resizing is constrained
+from 750 × 465 (75%) to 2000 × 1240 (200%) at the same aspect ratio. All existing
+controls live in one transformed design surface; if a host forces a different aspect
+ratio the surface is centered with letterboxing. The header's preset area is reserved
+for a later stage; the existing 8 programs and DSP are unchanged.
+
+The UI embeds Lato Regular and Semibold under the SIL OFL 1.1 (see
+`THIRD_PARTY_LICENSES.md`). `UiTypography` measures single-line text, reduces it to a
+specified minimum size, then adds an ellipsis and clips it to its rectangle. Knob
+values and labels have separate rows. macOS and Windows host DPI scaling remains the
+host/JUCE's responsibility; editor scale is independent of the OS display scale.
+
+UI assets (bytes): `Lato-Regular.ttf` 656,568; `Lato-SemiBold.ttf` 668,548;
+`OFL.txt` 4,407. Total under `assets/`: **1,329,523 bytes** (1,325,116 bytes
+embedded). CMake lists and checks every file in `assets/` against a 60 MiB budget.
+
+For the automated design-grid and text-fitting harness, configure with
+`-DGRAINVEIL_BUILD_UI_TESTS=ON`, build, and run `ctest --test-dir build -C Release
+--output-on-failure`. It checks non-overlapping grid rectangles at min/default/max
+editor scales and 100/150/200% simulated DPI, fitting/ellipsis and text ink clipping.
+This is not a substitute for visual testing in a DAW at real display scale settings.
+
 ## Build Instructions
 
 ### Windows (Visual Studio 2022, x64)

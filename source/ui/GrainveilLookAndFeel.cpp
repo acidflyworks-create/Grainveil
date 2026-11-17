@@ -1,4 +1,5 @@
 #include "GrainveilLookAndFeel.h"
+#include "UiTypography.h"
 #include <cmath>
 
 GrainveilLookAndFeel::GrainveilLookAndFeel()
@@ -12,6 +13,36 @@ GrainveilLookAndFeel::GrainveilLookAndFeel()
     setColour(juce::PopupMenu::backgroundColourId, juce::Colour(0xff1a1e20));
     setColour(juce::PopupMenu::textColourId, juce::Colour(0xffe0d6b3));
     setColour(juce::PopupMenu::highlightedBackgroundColourId, juce::Colour(0xff3e4a38));
+}
+
+juce::Font GrainveilLookAndFeel::getComboBoxFont(juce::ComboBox& box)
+{
+    return GrainveilUI::font(juce::jmin(15.0f, static_cast<float>(box.getHeight()) * 0.7f));
+}
+
+juce::Font GrainveilLookAndFeel::getPopupMenuFont() { return GrainveilUI::font(15.0f); }
+juce::Font GrainveilLookAndFeel::getSliderPopupFont(juce::Slider&) { return GrainveilUI::font(15.0f, true); }
+
+juce::Label* GrainveilLookAndFeel::createSliderTextBox(juce::Slider& slider)
+{
+    auto* label = juce::LookAndFeel_V4::createSliderTextBox(slider);
+    label->setFont(GrainveilUI::font(13.0f));
+    return label;
+}
+
+void GrainveilLookAndFeel::drawLabel(juce::Graphics& g, juce::Label& label)
+{
+    g.fillAll(label.findColour(juce::Label::backgroundColourId));
+    const float alpha = label.isEnabled() ? 1.0f : 0.5f;
+    if (! label.isBeingEdited())
+    {
+        g.setColour(label.findColour(juce::Label::textColourId).withMultipliedAlpha(alpha));
+        const auto textBounds = getLabelBorderSize(label).subtractedFrom(label.getLocalBounds()).toFloat();
+        GrainveilUI::drawFittedText(g, label.getText(), textBounds, label.getFont().getHeight(),
+                                   9.0f, label.getJustificationType());
+    }
+    g.setColour(label.findColour(juce::Label::outlineColourId).withMultipliedAlpha(alpha));
+    g.drawRect(label.getLocalBounds());
 }
 
 void GrainveilLookAndFeel::drawRotarySlider(juce::Graphics& g,
@@ -115,9 +146,6 @@ void GrainveilLookAndFeel::drawToggleButton(juce::Graphics& g,
     g.fillEllipse(ledX, ledY, ledSize, ledSize);
 
     g.setColour(isOn ? juce::Colour(0xffffe099) : juce::Colour(0xffb8b4a4));
-    g.setFont(juce::Font(juce::FontOptions(13.0f, juce::Font::bold)));
-    g.drawText(button.getButtonText(),
-               bounds.withTrimmedLeft(26.0f),
-               juce::Justification::centred,
-               false);
+    GrainveilUI::drawFittedText(g, button.getButtonText(), bounds.withTrimmedLeft(26.0f),
+                               13.0f, 9.0f, juce::Justification::centred, true);
 }

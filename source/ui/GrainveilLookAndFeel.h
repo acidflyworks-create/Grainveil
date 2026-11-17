@@ -7,6 +7,12 @@ class GrainveilLookAndFeel final : public juce::LookAndFeel_V4
 public:
     GrainveilLookAndFeel();
 
+    juce::Font getComboBoxFont(juce::ComboBox&) override;
+    juce::Font getPopupMenuFont() override;
+    juce::Font getSliderPopupFont(juce::Slider&) override;
+    juce::Label* createSliderTextBox(juce::Slider&) override;
+    void drawLabel(juce::Graphics&, juce::Label&) override;
+
     void drawRotarySlider(juce::Graphics& g,
                           int x, int y, int width, int height,
                           float sliderPosProportional,

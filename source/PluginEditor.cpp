@@ -1,23 +1,29 @@
 #include "PluginEditor.h"
 #include "Parameters.h"
+#include "ui/EditorGrid.h"
+#include "ui/UiTypography.h"
 
 GrainveilAudioProcessorEditor::GrainveilAudioProcessorEditor(GrainveilAudioProcessor& p)
     : AudioProcessorEditor(&p), audioProcessor(p)
 {
     setLookAndFeel(&lookAndFeel);
+    addAndMakeVisible(designSurface);
+    designSurface.setBounds(0, 0, GrainveilUI::Grid::width, GrainveilUI::Grid::height);
+    designSurface.setInterceptsMouseClicks(false, true);
 
-    addAndMakeVisible(oledDisplay);
+    designSurface.addAndMakeVisible(oledDisplay);
 
     modeCombo.addItemList(GrainveilParams::getModeNames(), 1);
-    addAndMakeVisible(modeCombo);
+    designSurface.addAndMakeVisible(modeCombo);
     modeLabel.setText("MODE", juce::dontSendNotification);
     modeLabel.setJustificationType(juce::Justification::centred);
     modeLabel.setColour(juce::Label::textColourId, juce::Colour(0xff9aa092));
-    addAndMakeVisible(modeLabel);
+    modeLabel.setFont(GrainveilUI::font(12.0f, true));
+    designSurface.addAndMakeVisible(modeLabel);
     modeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         audioProcessor.getAPVTS(), GrainveilParams::mode, modeCombo);
 
-    addAndMakeVisible(freezeButton);
+    designSurface.addAndMakeVisible(freezeButton);
     freezeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         audioProcessor.getAPVTS(), GrainveilParams::freeze, freezeButton);
 
@@ -47,8 +53,10 @@ GrainveilAudioProcessorEditor::GrainveilAudioProcessorEditor(GrainveilAudioProce
     spreadAtt   = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, GrainveilParams::spread, spreadSlider);
 
     setResizable(true, true);
-    setResizeLimits(640, 380, 1100, 700);
-    setSize(740, 440);
+    setResizeLimits(GrainveilUI::Grid::minWidth, GrainveilUI::Grid::minHeight,
+                    GrainveilUI::Grid::maxWidth, GrainveilUI::Grid::maxHeight);
+    getConstrainer()->setFixedAspectRatio(static_cast<double>(GrainveilUI::Grid::width) / GrainveilUI::Grid::height);
+    setSize(GrainveilUI::Grid::width, GrainveilUI::Grid::height);
 
     startTimerHz(30);
 }
@@ -63,13 +71,15 @@ void GrainveilAudioProcessorEditor::setupKnob(juce::Slider& slider, juce::Label&
 {
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 64, 18);
-    addAndMakeVisible(slider);
+    designSurface.addAndMakeVisible(slider);
 
     label.setText(text, juce::dontSendNotification);
     label.setJustificationType(juce::Justification::centred);
     label.setColour(juce::Label::textColourId, juce::Colour(0xffb8b4a4));
-    label.setFont(juce::Font(juce::FontOptions(11.5f, juce::Font::bold)));
-    addAndMakeVisible(label);
+    label.setFont(GrainveilUI::font(12.0f, true));
+    label.setTooltip(text);
+    slider.setTooltip(text);
+    designSurface.addAndMakeVisible(label);
 }
 
 void GrainveilAudioProcessorEditor::timerCallback()
@@ -79,6 +89,12 @@ void GrainveilAudioProcessorEditor::timerCallback()
 }
 
 void GrainveilAudioProcessorEditor::paint(juce::Graphics& g)
+{
+    // Letterbox defensively if a host ignores the editor's aspect constraint.
+    g.fillAll(juce::Colour(0xff141718));
+}
+
+void GrainveilAudioProcessorEditor::DesignSurface::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
 
@@ -111,49 +127,37 @@ void GrainveilAudioProcessorEditor::paint(juce::Graphics& g)
 
     // Subtle title
     g.setColour(juce::Colour(0xff7c8276));
-    g.setFont(juce::Font(juce::FontOptions(12.0f, juce::Font::bold)));
-    g.drawText("GRAINVEIL", plate.getX() + 30.0f, plate.getY() + 8.0f, 120.0f, 18.0f, juce::Justification::centredLeft, false);
+    GrainveilUI::drawFittedText(g, "GRAINVEIL", { plate.getX() + 30.0f, plate.getY() + 8.0f, 160.0f, 22.0f },
+                               12.0f, 9.0f, juce::Justification::centredLeft, true);
 }
 
 void GrainveilAudioProcessorEditor::resized()
 {
-    auto area = getLocalBounds().reduced(26);
+    using namespace GrainveilUI::Grid;
+    const float scale = juce::jmin(static_cast<float>(getWidth()) / static_cast<float>(width),
+                                   static_cast<float>(getHeight()) / static_cast<float>(height));
+    const float offsetX = (static_cast<float>(getWidth()) - static_cast<float>(width) * scale) * 0.5f;
+    const float offsetY = (static_cast<float>(getHeight()) - static_cast<float>(height) * scale) * 0.5f;
+    designSurface.setTransform(juce::AffineTransform::scale(scale).translated(offsetX, offsetY));
 
-    // Top section: OLED + Mode + Freeze
-    auto topRow = area.removeFromTop(110);
-    auto leftTop = topRow.removeFromLeft(150).reduced(4);
-    modeLabel.setBounds(leftTop.removeFromTop(18));
-    modeCombo.setBounds(leftTop.removeFromTop(30));
-    leftTop.removeFromTop(10);
-    freezeButton.setBounds(leftTop.removeFromTop(36));
+    this->modeLabel.setBounds(GrainveilUI::Grid::modeLabel);
+    modeCombo.setBounds(modeField);
+    freezeButton.setBounds(freezeField);
+    oledDisplay.setBounds(display);
 
-    oledDisplay.setBounds(topRow.reduced(8, 2));
-
-    area.removeFromTop(12);
-
-    // Main 6 knobs
-    auto mainRow = area.removeFromTop(145);
-    const int mainW = mainRow.getWidth() / 6;
-    auto placeKnob = [](juce::Rectangle<int> cell, juce::Slider& s, juce::Label& l)
+    auto place = [](const KnobCell& cell, juce::Slider& slider, juce::Label& label)
     {
-        l.setBounds(cell.removeFromTop(18));
-        s.setBounds(cell.reduced(2));
+        slider.setBounds(cell.control); // Value box remains inside this cell.
+        label.setBounds(cell.label);    // Dedicated row below, never over a value.
     };
-
-    placeKnob(mainRow.removeFromLeft(mainW), mixSlider,      mixLabel);
-    placeKnob(mainRow.removeFromLeft(mainW), sizeSlider,     sizeLabel);
-    placeKnob(mainRow.removeFromLeft(mainW), densitySlider,  densityLabel);
-    placeKnob(mainRow.removeFromLeft(mainW), scatterSlider,  scatterLabel);
-    placeKnob(mainRow.removeFromLeft(mainW), feedbackSlider, feedbackLabel);
-    placeKnob(mainRow,                       pitchSlider,    pitchLabel);
-
-    area.removeFromTop(8);
-
-    // Secondary 4 knobs centered
-    auto secRow = area.reduced(area.getWidth() / 8, 0);
-    const int secW = secRow.getWidth() / 4;
-    placeKnob(secRow.removeFromLeft(secW), captureSlider, captureLabel);
-    placeKnob(secRow.removeFromLeft(secW), toneSlider,    toneLabel);
-    placeKnob(secRow.removeFromLeft(secW), reverseSlider, reverseLabel);
-    placeKnob(secRow,                      spreadSlider,  spreadLabel);
+    place(mainKnobs[0], mixSlider, mixLabel);
+    place(mainKnobs[1], sizeSlider, sizeLabel);
+    place(mainKnobs[2], densitySlider, densityLabel);
+    place(mainKnobs[3], scatterSlider, scatterLabel);
+    place(mainKnobs[4], feedbackSlider, feedbackLabel);
+    place(mainKnobs[5], pitchSlider, pitchLabel);
+    place(secondaryKnobs[0], captureSlider, captureLabel);
+    place(secondaryKnobs[1], toneSlider, toneLabel);
+    place(secondaryKnobs[2], reverseSlider, reverseLabel);
+    place(secondaryKnobs[3], spreadSlider, spreadLabel);
 }

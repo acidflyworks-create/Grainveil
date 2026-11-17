@@ -21,6 +21,40 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(JUCE)
 
+# UI assets are embedded, not loaded from the user's system. Keep the budget
+# explicit so an accidentally oversized future image cannot enter a release.
+set(GRAINVEIL_UI_ASSETS
+    assets/fonts/Lato-Regular.ttf
+    assets/fonts/Lato-SemiBold.ttf
+)
+# Count every file under assets, including files that are not yet embedded.
+file(GLOB_RECURSE GRAINVEIL_ALL_ASSETS CONFIGURE_DEPENDS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/assets/*")
+set(GRAINVEIL_UI_ASSET_BYTES 0)
+foreach(asset IN LISTS GRAINVEIL_ALL_ASSETS)
+    if(NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${asset}")
+        file(SIZE "${CMAKE_CURRENT_SOURCE_DIR}/${asset}" asset_bytes)
+        math(EXPR GRAINVEIL_UI_ASSET_BYTES "${GRAINVEIL_UI_ASSET_BYTES} + ${asset_bytes}")
+        message(STATUS "Grainveil UI asset: ${asset} (${asset_bytes} bytes)")
+    endif()
+endforeach()
+set(GRAINVEIL_UI_ASSET_LIMIT 62914560) # 60 MiB
+message(STATUS "Grainveil embedded UI assets: ${GRAINVEIL_UI_ASSET_BYTES} / ${GRAINVEIL_UI_ASSET_LIMIT} bytes")
+if(GRAINVEIL_UI_ASSET_BYTES GREATER GRAINVEIL_UI_ASSET_LIMIT)
+    message(FATAL_ERROR "Grainveil UI assets exceed the 60 MiB budget (${GRAINVEIL_UI_ASSET_BYTES} bytes).")
+endif()
+juce_add_binary_data(GrainveilAssets SOURCES ${GRAINVEIL_UI_ASSETS})
+
+option(GRAINVEIL_BUILD_UI_TESTS "Build the UI layout and text test harness" OFF)
+if(GRAINVEIL_BUILD_UI_TESTS)
+    enable_testing()
+    juce_add_console_app(GrainveilUiTests PRODUCT_NAME "Grainveil UI Tests")
+    target_sources(GrainveilUiTests PRIVATE tests/UiLayoutTests.cpp source/ui/UiTypography.cpp)
+    target_include_directories(GrainveilUiTests PRIVATE source)
+    target_compile_definitions(GrainveilUiTests PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+    target_link_libraries(GrainveilUiTests PRIVATE GrainveilAssets juce::juce_gui_basics)
+    add_test(NAME GrainveilUiLayout COMMAND GrainveilUiTests)
+endif()
+
 # Override on the command line if needed, e.g. -DGRAINVEIL_FORMATS=VST3
 if(APPLE)
     set(GRAINVEIL_DEFAULT_FORMATS VST3 AU)
@@ -50,6 +84,7 @@ target_sources(Grainveil
         source/PluginEditor.cpp
         source/ui/GrainveilLookAndFeel.cpp
         source/ui/OledDisplay.cpp
+        source/ui/UiTypography.cpp
 )
 
 target_include_directories(Grainveil
@@ -66,6 +101,7 @@ target_compile_definitions(Grainveil
 
 target_link_libraries(Grainveil
     PRIVATE
+        GrainveilAssets
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC

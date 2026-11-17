@@ -19,8 +19,15 @@ private:
     void timerCallback() override;
     void setupKnob(juce::Slider& slider, juce::Label& label, const juce::String& text);
 
+    class DesignSurface final : public juce::Component
+    {
+    public:
+        void paint(juce::Graphics&) override;
+    };
+
     GrainveilAudioProcessor& audioProcessor;
     GrainveilLookAndFeel lookAndFeel;
+    DesignSurface designSurface;
     OledDisplay oledDisplay;
     GrainveilDsp::TelemetrySnapshot telemetrySnapshot;
 

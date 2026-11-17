@@ -1,5 +1,6 @@
 #include "OledDisplay.h"
 #include "../Parameters.h"
+#include "UiTypography.h"
 
 void OledDisplay::setSnapshot(const GrainveilDsp::TelemetrySnapshot& newSnapshot)
 {
@@ -26,14 +27,18 @@ void OledDisplay::paint(juce::Graphics& g)
                                       ? modeNames[snapshot.mode]
                                       : "Cloud";
 
+    // Reserve separate rectangles so even a long mode name cannot meet FREEZE.
+    auto freezeZone = header.removeFromRight(88.0f);
+    auto modeZone = header.withTrimmedRight(12.0f);
     g.setColour(juce::Colour(0xffe6a832));
-    g.setFont(juce::Font(juce::FontOptions(13.0f, juce::Font::bold)));
-    g.drawText(modeName.toUpperCase(), header, juce::Justification::centredLeft, false);
+    GrainveilUI::drawFittedText(g, modeName.toUpperCase(), modeZone, 13.0f, 9.0f,
+                               juce::Justification::centredLeft, true);
 
     if (snapshot.frozen)
     {
         g.setColour(juce::Colour(0xff7ed957));
-        g.drawText("FREEZE", header, juce::Justification::centredRight, false);
+        GrainveilUI::drawFittedText(g, "FREEZE", freezeZone, 13.0f, 9.0f,
+                                   juce::Justification::centredRight, true);
     }
 
     // Waveform area

@@ -46,7 +46,7 @@ jobs:
       - name: Configure (Windows, MSVC x64)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DGRAINVEIL_BUILD_UI_TESTS=ON
 
       - name: Configure (macOS, universal x86_64 + arm64)
         if: runner.os == 'macOS'
@@ -55,12 +55,17 @@ jobs:
           xcodebuild -version
           cmake -B build -G "Unix Makefiles" \
             -DCMAKE_BUILD_TYPE=Release \
+            -DGRAINVEIL_BUILD_UI_TESTS=ON \
             -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
 
       - name: Build
         shell: bash
         run: cmake --build build --config Release --parallel 4
+
+      - name: Test layout and text fitting
+        shell: bash
+        run: ctest --test-dir build -C Release --output-on-failure
 
       - name: List artefacts
         shell: bash
