@@ -12,6 +12,18 @@ public:
     juce::Font getSliderPopupFont(juce::Slider&) override;
     juce::Label* createSliderTextBox(juce::Slider&) override;
     void drawLabel(juce::Graphics&, juce::Label&) override;
+    void fillTextEditorBackground(juce::Graphics&, int width, int height, juce::TextEditor&) override;
+    void drawTextEditorOutline(juce::Graphics&, int width, int height, juce::TextEditor&) override;
+    void positionComboBoxText(juce::ComboBox&, juce::Label&) override;
+    void drawPopupMenuBackground(juce::Graphics&, int width, int height) override;
+    void drawPopupMenuItem(juce::Graphics&, const juce::Rectangle<int>& area,
+                           bool isSeparator, bool isActive, bool isHighlighted, bool isTicked, bool hasSubMenu,
+                           const juce::String& text, const juce::String& shortcutKeyText,
+                           const juce::Drawable* icon, const juce::Colour* textColour) override;
+    void drawPopupMenuSectionHeader(juce::Graphics&, const juce::Rectangle<int>&, const juce::String&) override;
+    juce::Rectangle<int> getTooltipBounds(const juce::String&, juce::Point<int>, juce::Rectangle<int>) override;
+    void drawTooltip(juce::Graphics&, const juce::String&, int width, int height) override;
+    void drawCornerResizer(juce::Graphics&, int width, int height, bool isMouseOver, bool isMouseDragging) override;
 
     void drawRotarySlider(juce::Graphics& g,
                           int x, int y, int width, int height,

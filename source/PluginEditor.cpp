@@ -2,9 +2,10 @@
 #include "Parameters.h"
 #include "ui/EditorGrid.h"
 #include "ui/UiTypography.h"
+#include "ui/Palette.h"
 
 GrainveilAudioProcessorEditor::GrainveilAudioProcessorEditor(GrainveilAudioProcessor& p)
-    : AudioProcessorEditor(&p), audioProcessor(p)
+    : AudioProcessorEditor(&p), audioProcessor(p), tooltipWindow(this, 650)
 {
     setLookAndFeel(&lookAndFeel);
     addAndMakeVisible(designSurface);
@@ -14,6 +15,9 @@ GrainveilAudioProcessorEditor::GrainveilAudioProcessorEditor(GrainveilAudioProce
     designSurface.addAndMakeVisible(oledDisplay);
 
     modeCombo.addItemList(GrainveilParams::getModeNames(), 1);
+    modeCombo.setTitle("Grain mode");
+    modeCombo.setTooltip("Choose the granular processing mode");
+    modeCombo.setRepaintsOnMouseActivity(true);
     designSurface.addAndMakeVisible(modeCombo);
     modeLabel.setText("MODE", juce::dontSendNotification);
     modeLabel.setJustificationType(juce::Justification::centred);
@@ -27,17 +31,17 @@ GrainveilAudioProcessorEditor::GrainveilAudioProcessorEditor(GrainveilAudioProce
     freezeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         audioProcessor.getAPVTS(), GrainveilParams::freeze, freezeButton);
 
-    setupKnob(mixSlider,      mixLabel,      "MIX");
-    setupKnob(sizeSlider,     sizeLabel,     "SIZE");
-    setupKnob(densitySlider,  densityLabel,  "DENSITY");
-    setupKnob(scatterSlider,  scatterLabel,  "SCATTER");
-    setupKnob(feedbackSlider, feedbackLabel, "FEEDBACK");
-    setupKnob(pitchSlider,    pitchLabel,    "PITCH");
-
-    setupKnob(captureSlider,  captureLabel,  "CAPTURE");
-    setupKnob(toneSlider,     toneLabel,     "TONE");
-    setupKnob(reverseSlider,  reverseLabel,  "REVERSE");
-    setupKnob(spreadSlider,   spreadLabel,   "SPREAD");
+    using Unit = GrainveilKnob::Unit;
+    setupKnob(mixSlider,      mixLabel,      "MIX",      Unit::percent,      "Blend dry and granular signals");
+    setupKnob(sizeSlider,     sizeLabel,     "SIZE",     Unit::milliseconds, "Set grain duration");
+    setupKnob(densitySlider,  densityLabel,  "DENSITY",  Unit::hertz,        "Set the grain generation rate");
+    setupKnob(scatterSlider,  scatterLabel,  "SCATTER",  Unit::percent,      "Vary grain positions in the buffer");
+    setupKnob(feedbackSlider, feedbackLabel, "FEEDBACK", Unit::percent,      "Return processed signal to the buffer");
+    setupKnob(pitchSlider,    pitchLabel,    "PITCH",    Unit::semitones,    "Transpose the grains");
+    setupKnob(captureSlider,  captureLabel,  "CAPTURE",  Unit::milliseconds, "Set the capture buffer duration");
+    setupKnob(toneSlider,     toneLabel,     "TONE",     Unit::percent,      "Adjust the grain tone");
+    setupKnob(reverseSlider,  reverseLabel,  "REVERSE",  Unit::percent,      "Set the amount of reversed grains");
+    setupKnob(spreadSlider,   spreadLabel,   "SPREAD",   Unit::percent,      "Set the stereo grain spread");
 
     auto& apvts = audioProcessor.getAPVTS();
     mixAtt      = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, GrainveilParams::mix, mixSlider);
@@ -67,25 +71,52 @@ GrainveilAudioProcessorEditor::~GrainveilAudioProcessorEditor()
     setLookAndFeel(nullptr);
 }
 
-void GrainveilAudioProcessorEditor::setupKnob(juce::Slider& slider, juce::Label& label, const juce::String& text)
+void GrainveilAudioProcessorEditor::setupKnob(GrainveilKnob& slider, juce::Label& label,
+                                                 const juce::String& text, GrainveilKnob::Unit unit,
+                                                 const juce::String& tooltip)
 {
-    slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 64, 18);
+    slider.configure(text, unit, tooltip);
+    slider.addListener(this);
     designSurface.addAndMakeVisible(slider);
 
     label.setText(text, juce::dontSendNotification);
     label.setJustificationType(juce::Justification::centred);
     label.setColour(juce::Label::textColourId, juce::Colour(0xffb8b4a4));
     label.setFont(GrainveilUI::font(12.0f, true));
-    label.setTooltip(text);
-    slider.setTooltip(text);
+    label.setTooltip(tooltip);
     designSurface.addAndMakeVisible(label);
 }
 
 void GrainveilAudioProcessorEditor::timerCallback()
 {
-    audioProcessor.getTelemetrySnapshot(telemetrySnapshot);
-    oledDisplay.setSnapshot(telemetrySnapshot);
+    // The old DSP telemetry object is not a safe cross-thread snapshot. Avoid
+    // touching it until its producer can be changed under an agreed scope.
+    oledDisplay.setControlState(modeCombo.getText(), freezeButton.getToggleState());
+    oledDisplay.advanceAnimation();
+}
+
+void GrainveilAudioProcessorEditor::sliderDragStarted(juce::Slider* slider)
+{
+    if (auto* knob = dynamic_cast<GrainveilKnob*>(slider))
+    {
+        activeKnob = knob;
+        oledDisplay.beginParameter(knob->getDisplayName(), knob->getDisplayValue());
+    }
+}
+
+void GrainveilAudioProcessorEditor::sliderValueChanged(juce::Slider* slider)
+{
+    if (slider == activeKnob && activeKnob != nullptr)
+        oledDisplay.updateParameter(activeKnob->getDisplayName(), activeKnob->getDisplayValue());
+}
+
+void GrainveilAudioProcessorEditor::sliderDragEnded(juce::Slider* slider)
+{
+    if (slider == activeKnob)
+    {
+        activeKnob = nullptr;
+        oledDisplay.endParameter();
+    }
 }
 
 void GrainveilAudioProcessorEditor::paint(juce::Graphics& g)
@@ -96,39 +127,72 @@ void GrainveilAudioProcessorEditor::paint(juce::Graphics& g)
 
 void GrainveilAudioProcessorEditor::DesignSurface::paint(juce::Graphics& g)
 {
-    auto bounds = getLocalBounds().toFloat();
+    using namespace GrainveilUI;
+    const auto bounds = getLocalBounds().toFloat();
+    g.fillAll(Palette::background);
 
-    // Outer metallic bezel
-    g.fillAll(juce::Colour(0xff141718));
-    juce::ColourGradient bezelGrad(juce::Colour(0xff424744), 0.0f, 0.0f,
-                                   juce::Colour(0xff202422), 0.0f, bounds.getHeight(), false);
-    g.setGradientFill(bezelGrad);
-    g.fillRoundedRectangle(bounds.reduced(4.0f), 12.0f);
-
-    // Recessed charcoal/olive inner plate
-    auto plate = bounds.reduced(14.0f);
-    g.setColour(juce::Colour(0xff1d2120));
-    g.fillRoundedRectangle(plate, 8.0f);
-    g.setColour(juce::Colour(0xff383f3a));
-    g.drawRoundedRectangle(plate, 8.0f, 1.5f);
-
-    // Subtle corner screws
-    auto drawScrew = [&g](float cx, float cy)
+    // Procedural graphite chassis: vector geometry and deterministic fine
+    // brushing, with no texture bitmaps or dependence on display scale.
+    auto bezel = bounds.reduced(3.0f);
+    juce::ColourGradient edge(juce::Colour(0xff60645d), bezel.getTopLeft(),
+                              juce::Colour(0xff191d1b), bezel.getBottomLeft(), false);
+    g.setGradientFill(edge);
+    g.fillRoundedRectangle(bezel, 13.0f);
+    auto plate = bounds.reduced(10.0f);
+    juce::ColourGradient face(juce::Colour(0xff343835), plate.getTopLeft(),
+                              juce::Colour(0xff222725), plate.getBottomRight(), false);
+    g.setGradientFill(face);
+    g.fillRoundedRectangle(plate, 9.0f);
     {
-        g.setColour(juce::Colour(0xff525852));
-        g.fillEllipse(cx - 5.0f, cy - 5.0f, 10.0f, 10.0f);
-        g.setColour(juce::Colour(0xff181b1a));
-        g.drawLine(cx - 3.0f, cy - 2.0f, cx + 3.0f, cy + 2.0f, 1.4f);
-    };
-    drawScrew(plate.getX() + 14.0f, plate.getY() + 14.0f);
-    drawScrew(plate.getRight() - 14.0f, plate.getY() + 14.0f);
-    drawScrew(plate.getX() + 14.0f, plate.getBottom() - 14.0f);
-    drawScrew(plate.getRight() - 14.0f, plate.getBottom() - 14.0f);
+        const juce::Graphics::ScopedSaveState saved(g);
+        juce::Path clip;
+        clip.addRoundedRectangle(plate.reduced(1.0f), 8.0f);
+        g.reduceClipRegion(clip);
+        for (int y = 14; y < Grid::height - 14; y += 3)
+        {
+            const float alpha = static_cast<float>((y * 17) % 11 + 2) / 1100.0f;
+            g.setColour(juce::Colours::white.withAlpha(alpha));
+            g.drawHorizontalLine(y, plate.getX() + 1.0f, plate.getRight() - 1.0f);
+        }
+        juce::ColourGradient vignette(juce::Colours::transparentBlack, plate.getCentreX(), plate.getCentreY(),
+                                      juce::Colours::black.withAlpha(0.16f), plate.getRight(), plate.getBottom(), true);
+        g.setGradientFill(vignette);
+        g.fillRect(plate);
+    }
+    g.setColour(juce::Colour(0xff6a7066).withAlpha(0.5f));
+    g.drawRoundedRectangle(plate.reduced(0.5f), 9.0f, 1.0f);
 
-    // Subtle title
-    g.setColour(juce::Colour(0xff7c8276));
-    GrainveilUI::drawFittedText(g, "GRAINVEIL", { plate.getX() + 30.0f, plate.getY() + 8.0f, 160.0f, 22.0f },
-                               12.0f, 9.0f, juce::Justification::centredLeft, true);
+    // A small original linear mark paired with the Grainveil wordmark.
+    const float markX = 49.0f, markY = 40.0f;
+    g.setColour(Palette::warm);
+    juce::Path mark;
+    for (int i = 0; i < 3; ++i)
+    {
+        const float x = markX + static_cast<float>(i) * 6.0f;
+        mark.startNewSubPath(x, markY + 11.0f);
+        mark.cubicTo(x + 7.0f, markY + 8.0f, x - 2.0f, markY + 2.0f, x + 5.0f, markY - 2.0f);
+    }
+    g.strokePath(mark, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    g.setColour(Palette::text);
+    drawFittedText(g, "GRAINVEIL", { 78.0f, 33.0f, 155.0f, 23.0f }, 18.0f, 12.0f, juce::Justification::centredLeft, true);
+    g.setColour(Palette::muted);
+    drawFittedText(g, "STEREO GRANULAR PROCESSOR", Grid::presetZone.toFloat(), 10.0f, 8.0f,
+                   juce::Justification::centred, true);
+    drawFittedText(g, "SIGNAL  /  SPACE", { 782.0f, 34.0f, 168.0f, 20.0f }, 10.0f, 8.0f,
+                   juce::Justification::centredRight, true);
+
+    g.setColour(juce::Colour(0xff8b9085).withAlpha(0.28f));
+    g.drawHorizontalLine(79, 49.0f, 951.0f);
+    g.setColour(Palette::muted.withAlpha(0.8f));
+    drawFittedText(g, "01 / ALGORITHM", { 50.0f, 98.0f, 170.0f, 18.0f }, 9.0f, 8.0f,
+                   juce::Justification::centredLeft, true);
+    drawFittedText(g, "02 / BUFFER MONITOR", { 270.0f, 79.0f, 460.0f, 16.0f }, 9.0f, 8.0f,
+                   juce::Justification::centredLeft, true);
+    drawFittedText(g, "03 / MEMORY HOLD", { 780.0f, 120.0f, 170.0f, 18.0f }, 9.0f, 8.0f,
+                   juce::Justification::centredLeft, true);
+    g.setColour(juce::Colour(0xffa0a59a).withAlpha(0.17f));
+    g.drawHorizontalLine(247, 49.0f, 951.0f);
+    g.drawHorizontalLine(443, 49.0f, 951.0f);
 }
 
 void GrainveilAudioProcessorEditor::resized()

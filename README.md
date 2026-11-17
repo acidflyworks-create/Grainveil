@@ -30,13 +30,25 @@ the first scan, and allow the plugin in System Settings if Gatekeeper asks.
 После запуска workflow архивы с `.vst3` появляются на вкладке **Releases** и в артефактах
 запуска. Локально из Linux собрать эти два формата нельзя — нужен MSVC и Xcode/macOS SDK.
 
-## Editor foundation (redesign stage A)
+## Editor redesign (stage B)
 
 The current editor uses a 1000 × 620 logical design grid. User resizing is constrained
 from 750 × 465 (75%) to 2000 × 1240 (200%) at the same aspect ratio. All existing
 controls live in one transformed design surface; if a host forces a different aspect
 ratio the surface is centered with letterboxing. The header's preset area is reserved
-for a later stage; the existing 8 programs and DSP are unchanged.
+for a later stage; the existing 8 programs and DSP are unchanged. A procedural graphite
+panel, custom rotary rings and freeze switch, selector/menu styling and embedded-font
+tooltips make up the stage B visuals. When a knob is dragged its name and formatted
+value fade into the display's dedicated value strip; the editable numeric field remains
+available below the knob. Mode and freeze indicators follow the existing UI attachments.
+
+The screen intentionally says **BUFFER MONITOR UNAVAILABLE**. The existing DSP telemetry
+uses a sequence flag around concurrent reads/writes to a non-atomic struct, which is not a
+safe C++ cross-thread handoff. The editor no longer reads it. The waveform and grain
+marker renderer accepts a message-thread-owned snapshot, but connecting it to live DSP
+requires an independently agreed change to the audio-to-UI handoff. Likewise, the
+screen's `SESSION / LIVE` is a neutral session label, not a current preset name; a
+truthful preset-name display awaits stage C's thread-safe preset state.
 
 The UI embeds Lato Regular and Semibold under the SIL OFL 1.1 (see
 `THIRD_PARTY_LICENSES.md`). `UiTypography` measures single-line text, reduces it to a
@@ -52,7 +64,11 @@ For the automated design-grid and text-fitting harness, configure with
 `-DGRAINVEIL_BUILD_UI_TESTS=ON`, build, and run `ctest --test-dir build -C Release
 --output-on-failure`. It checks non-overlapping grid rectangles at min/default/max
 editor scales and 100/150/200% simulated DPI, fitting/ellipsis and text ink clipping.
-This is not a substitute for visual testing in a DAW at real display scale settings.
+The test also renders the actual editor off-screen at min/default/max sizes and simulated
+100/150/200% DPI into `build/ui-previews/`, plus a clearly named synthetic monitor
+fixture. CI uploads these images as `Grainveil-UI-previews-Windows` and
+`Grainveil-UI-previews-macOS`. They are test renders, not screenshots from a DAW or
+proof of behavior at real OS display scale settings.
 
 ## Build Instructions
 
@@ -92,7 +108,7 @@ cp -R build/Grainveil_artefacts/Release/AU/Grainveil.component ~/Library/Audio/P
 
 ## Real-Time Safety & Hardening Checklist
 - **Zero allocations in `processBlock`**: All 32 `GrainVoice` instances, the 16-second stereo `CircularBuffer`, SVF filters, and `TelemetrySnapshot` are preallocated in `prepareToPlay`.
-- **No locks / I/O / blocking**: UI telemetry uses a lock-free sequence counter; no mutexes, file I/O, or debug logging exist on the audio thread.
+- **No locks / I/O / blocking**: no mutexes, file I/O, or debug logging exist on the audio thread. The existing telemetry handoff is not safe for concurrent struct access and is currently not read by the editor (see Editor redesign above).
 - **Denormals & Stability**: `juce::ScopedNoDenormals` in `processBlock`, NaN/Inf sanitization, `feedback` clamped to `0.95`, and `std::tanh` soft-clipping on feedback and wet sum.
 - **Parameter Smoothing**: `mix`, `inGain`, `outGain`, `captureTime`, `feedback`, `fbTone`, `grainSize`, `density`, `pitch`, and `tone` are smoothed via `juce::SmoothedValue`.
 

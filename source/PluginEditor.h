@@ -4,9 +4,12 @@
 #include "PluginProcessor.h"
 #include "ui/GrainveilLookAndFeel.h"
 #include "ui/OledDisplay.h"
+#include "ui/Knob.h"
+#include "ui/FreezeButton.h"
 
 class GrainveilAudioProcessorEditor final : public juce::AudioProcessorEditor,
-                                            private juce::Timer
+                                            private juce::Timer,
+                                            private juce::Slider::Listener
 {
 public:
     explicit GrainveilAudioProcessorEditor(GrainveilAudioProcessor&);
@@ -17,7 +20,10 @@ public:
 
 private:
     void timerCallback() override;
-    void setupKnob(juce::Slider& slider, juce::Label& label, const juce::String& text);
+    void sliderValueChanged(juce::Slider*) override;
+    void sliderDragStarted(juce::Slider*) override;
+    void sliderDragEnded(juce::Slider*) override;
+    void setupKnob(GrainveilKnob&, juce::Label&, const juce::String&, GrainveilKnob::Unit, const juce::String& tooltip);
 
     class DesignSurface final : public juce::Component
     {
@@ -29,20 +35,21 @@ private:
     GrainveilLookAndFeel lookAndFeel;
     DesignSurface designSurface;
     OledDisplay oledDisplay;
-    GrainveilDsp::TelemetrySnapshot telemetrySnapshot;
+    juce::TooltipWindow tooltipWindow;
+    GrainveilKnob* activeKnob = nullptr;
 
     // 6 main knobs
-    juce::Slider mixSlider, sizeSlider, densitySlider, scatterSlider, feedbackSlider, pitchSlider;
+    GrainveilKnob mixSlider, sizeSlider, densitySlider, scatterSlider, feedbackSlider, pitchSlider;
     juce::Label  mixLabel,  sizeLabel,  densityLabel,  scatterLabel,  feedbackLabel,  pitchLabel;
 
     // 4 secondary knobs
-    juce::Slider captureSlider, toneSlider, reverseSlider, spreadSlider;
+    GrainveilKnob captureSlider, toneSlider, reverseSlider, spreadSlider;
     juce::Label  captureLabel,  toneLabel,  reverseLabel,  spreadLabel;
 
     // Mode + Freeze
     juce::ComboBox modeCombo;
     juce::Label    modeLabel;
-    juce::ToggleButton freezeButton { "FREEZE" };
+    FreezeButton freezeButton;
 
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>
         mixAtt, sizeAtt, densityAtt, scatterAtt, feedbackAtt, pitchAtt,

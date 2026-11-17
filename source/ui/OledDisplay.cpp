@@ -1,74 +1,159 @@
 #include "OledDisplay.h"
-#include "../Parameters.h"
+#include "Palette.h"
 #include "UiTypography.h"
+#include <cmath>
 
-void OledDisplay::setSnapshot(const GrainveilDsp::TelemetrySnapshot& newSnapshot)
+void OledDisplay::setControlState(const juce::String& mode, bool frozen)
 {
-    snapshot = newSnapshot;
+    if (modeName != mode || isFrozen != frozen)
+    {
+        modeName = mode;
+        isFrozen = frozen;
+        repaint();
+    }
+}
+
+void OledDisplay::setMonitorData(const std::array<float, waveformPoints>& wave,
+                                 const std::array<float, maxGrains>& markers, int count)
+{
+    waveform = wave;
+    grainPositions = markers;
+    grainCount = juce::jlimit(0, static_cast<int>(maxGrains), count);
+    monitorAvailable = true;
     repaint();
+}
+
+void OledDisplay::setMonitorUnavailable()
+{
+    if (monitorAvailable)
+    {
+        monitorAvailable = false;
+        repaint();
+    }
+}
+
+void OledDisplay::beginParameter(const juce::String& name, const juce::String& value)
+{
+    parameterHeld = true;
+    updateParameter(name, value);
+}
+
+void OledDisplay::updateParameter(const juce::String& name, const juce::String& value)
+{
+    parameterName = name;
+    parameterValue = value;
+    fadeDeadlineMs = juce::Time::getMillisecondCounterHiRes() + 700.0;
+    repaint();
+}
+
+void OledDisplay::endParameter()
+{
+    parameterHeld = false;
+    fadeDeadlineMs = juce::Time::getMillisecondCounterHiRes() + 700.0;
+}
+
+void OledDisplay::advanceAnimation()
+{
+    const auto visible = parameterHeld || juce::Time::getMillisecondCounterHiRes() < fadeDeadlineMs;
+    const auto previous = parameterOpacity;
+    parameterOpacity = juce::jlimit(0.0f, 1.0f, parameterOpacity + (visible ? 0.16f : -0.10f));
+    if (parameterOpacity != previous)
+        repaint();
 }
 
 void OledDisplay::paint(juce::Graphics& g)
 {
-    auto bounds = getLocalBounds().toFloat();
+    using namespace GrainveilUI;
+    const auto outer = getLocalBounds().toFloat();
+    g.setColour(juce::Colour(0xff0c0f0f));
+    g.fillRoundedRectangle(outer, 8.0f);
+    g.setColour(juce::Colour(0xff474b46));
+    g.drawRoundedRectangle(outer.reduced(0.7f), 8.0f, 1.0f);
+    auto screen = outer.reduced(7.0f);
+    juce::ColourGradient glass(juce::Colour(0xff1b2b26), screen.getTopLeft(),
+                               juce::Colour(0xff0c1715), screen.getBottomRight(), false);
+    g.setGradientFill(glass);
+    g.fillRoundedRectangle(screen, 3.5f);
+    g.setColour(juce::Colour(0xff263b32));
+    g.drawRoundedRectangle(screen.reduced(0.5f), 3.5f, 1.0f);
 
-    // OLED bezel & screen
-    g.setColour(juce::Colour(0xff0b0d0c));
-    g.fillRoundedRectangle(bounds, 5.0f);
-    g.setColour(juce::Colour(0xff383f38));
-    g.drawRoundedRectangle(bounds.reduced(0.5f), 5.0f, 1.2f);
+    auto inner = screen.reduced(13.0f, 8.0f);
+    auto header = inner.removeFromTop(21.0f);
+    auto session = header.removeFromLeft(137.0f);
+    header.removeFromLeft(6.0f);
+    auto state = header.removeFromRight(72.0f);
+    header.removeFromRight(6.0f);
+    auto mode = header;
 
-    auto inner = bounds.reduced(8.0f, 6.0f);
+    g.setColour(Palette::screenText.withAlpha(0.6f));
+    drawFittedText(g, "SESSION", session.removeFromLeft(57.0f), 9.5f, 8.0f, juce::Justification::centredLeft, true);
+    g.setColour(juce::Colour(0xffd5e3c9));
+    drawFittedText(g, "LIVE", session, 11.0f, 8.0f, juce::Justification::centredLeft, true);
+    g.setColour(Palette::screenText);
+    drawFittedText(g, modeName.toUpperCase(), mode, 11.5f, 8.0f, juce::Justification::centred, true);
+    g.setColour(isFrozen ? Palette::warmBright : Palette::screenText.withAlpha(0.5f));
+    drawFittedText(g, isFrozen ? "FROZEN" : "LIVE", state, 10.0f, 8.0f, juce::Justification::centredRight, true);
 
-    // Header: Mode name + Freeze badge
-    auto header = inner.removeFromTop(18.0f);
-    const auto modeNames = GrainveilParams::getModeNames();
-    const juce::String modeName = (snapshot.mode >= 0 && snapshot.mode < modeNames.size())
-                                      ? modeNames[snapshot.mode]
-                                      : "Cloud";
-
-    // Reserve separate rectangles so even a long mode name cannot meet FREEZE.
-    auto freezeZone = header.removeFromRight(88.0f);
-    auto modeZone = header.withTrimmedRight(12.0f);
-    g.setColour(juce::Colour(0xffe6a832));
-    GrainveilUI::drawFittedText(g, modeName.toUpperCase(), modeZone, 13.0f, 9.0f,
-                               juce::Justification::centredLeft, true);
-
-    if (snapshot.frozen)
+    auto footer = inner.removeFromBottom(25.0f);
+    auto waveArea = inner.reduced(0.0f, 2.0f);
+    g.setColour(juce::Colour(0xff2b4337).withAlpha(0.75f));
+    g.drawHorizontalLine(static_cast<int>(waveArea.getCentreY()), waveArea.getX(), waveArea.getRight());
+    for (int i = 1; i < 8; ++i)
     {
-        g.setColour(juce::Colour(0xff7ed957));
-        GrainveilUI::drawFittedText(g, "FREEZE", freezeZone, 13.0f, 9.0f,
-                                   juce::Justification::centredRight, true);
+        const float x = waveArea.getX() + waveArea.getWidth() * static_cast<float>(i) / 8.0f;
+        g.setColour(juce::Colour(0xff253b31).withAlpha(0.65f));
+        g.drawVerticalLine(static_cast<int>(x), waveArea.getY(), waveArea.getBottom());
+    }
+    if (monitorAvailable)
+    {
+        const juce::Graphics::ScopedSaveState saved(g);
+        juce::Path clip;
+        clip.addRectangle(waveArea);
+        g.reduceClipRegion(clip);
+        juce::Path path;
+        for (size_t i = 0; i < waveform.size(); ++i)
+        {
+            const float sample = std::isfinite(waveform[i]) ? juce::jlimit(-1.0f, 1.0f, waveform[i]) : 0.0f;
+            const float x = waveArea.getX() + static_cast<float>(i) * waveArea.getWidth() / static_cast<float>(waveform.size() - 1);
+            const float y = waveArea.getCentreY() - sample * waveArea.getHeight() * 0.42f;
+            if (i == 0) path.startNewSubPath(x, y); else path.lineTo(x, y);
+        }
+        g.setColour(Palette::screenText);
+        g.strokePath(path, juce::PathStrokeType(1.25f));
+        g.setColour(Palette::warm.withAlpha(0.75f));
+        for (int i = 0; i < grainCount; ++i)
+        {
+            const float pos = grainPositions[static_cast<size_t>(i)];
+            if (! std::isfinite(pos)) continue;
+            const float x = waveArea.getX() + juce::jlimit(0.0f, 1.0f, pos) * waveArea.getWidth();
+            g.drawVerticalLine(static_cast<int>(x), waveArea.getY(), waveArea.getBottom());
+        }
+    }
+    else
+    {
+        g.setColour(Palette::screenText.withAlpha(0.55f));
+        drawFittedText(g, "BUFFER MONITOR UNAVAILABLE", waveArea.reduced(8.0f), 10.0f, 8.0f,
+                       juce::Justification::centred, true);
     }
 
-    // Waveform area
-    auto waveArea = inner.reduced(0.0f, 4.0f);
-    const float midY = waveArea.getCentreY();
-    const float halfH = waveArea.getHeight() * 0.45f;
-
-    g.setColour(juce::Colour(0xff1e2820));
-    g.drawHorizontalLine(static_cast<int>(midY), waveArea.getX(), waveArea.getRight());
-
-    juce::Path wavePath;
-    const int n = GrainveilDsp::TelemetrySnapshot::waveformPoints;
-    for (int i = 0; i < n; ++i)
+    g.setColour(juce::Colour(0xff31483b));
+    g.drawHorizontalLine(static_cast<int>(footer.getY()), footer.getX(), footer.getRight());
+    if (parameterOpacity > 0.0f)
     {
-        const float x = waveArea.getX() + (static_cast<float>(i) / static_cast<float>(n - 1)) * waveArea.getWidth();
-        const float y = midY - juce::jlimit(-1.0f, 1.0f, snapshot.waveform[static_cast<size_t>(i)]) * halfH;
-        if (i == 0)
-            wavePath.startNewSubPath(x, y);
-        else
-            wavePath.lineTo(x, y);
+        auto popup = footer.reduced(0.0f, 3.0f);
+        g.setColour(juce::Colour(0xff334c3b).withAlpha(0.60f * parameterOpacity));
+        g.fillRoundedRectangle(popup, 3.0f);
+        auto valueZone = popup.removeFromRight(120.0f).reduced(6.0f, 0.0f);
+        auto nameZone = popup.reduced(8.0f, 0.0f);
+        g.setColour(Palette::screenText.withAlpha(parameterOpacity));
+        drawFittedText(g, parameterName.toUpperCase(), nameZone, 10.0f, 8.0f, juce::Justification::centredLeft, true);
+        g.setColour(juce::Colour(0xffe5edce).withAlpha(parameterOpacity));
+        drawFittedText(g, parameterValue, valueZone, 12.0f, 8.0f, juce::Justification::centredRight, true);
     }
-    g.setColour(juce::Colour(0xff7ed957).withAlpha(0.85f));
-    g.strokePath(wavePath, juce::PathStrokeType(1.3f));
-
-    // Grain position ticks
-    g.setColour(juce::Colour(0xffe6a832).withAlpha(0.8f));
-    for (int i = 0; i < snapshot.activeGrainCount; ++i)
+    else
     {
-        const float normX = snapshot.grainPositions[static_cast<size_t>(i)];
-        const float gx = waveArea.getX() + normX * waveArea.getWidth();
-        g.drawVerticalLine(static_cast<int>(gx), waveArea.getY(), waveArea.getBottom());
+        g.setColour(Palette::screenText.withAlpha(0.4f));
+        drawFittedText(g, "GRAINVEIL  /  GRANULAR PROCESSOR", footer, 9.0f, 8.0f,
+                       juce::Justification::centredLeft, true);
     }
 }

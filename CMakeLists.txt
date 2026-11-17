@@ -109,3 +109,11 @@ target_link_libraries(Grainveil
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags
 )
+
+if(GRAINVEIL_BUILD_UI_TESTS)
+    juce_add_console_app(GrainveilUiPreview PRODUCT_NAME "Grainveil UI Preview")
+    target_sources(GrainveilUiPreview PRIVATE tests/UiPreview.cpp)
+    target_include_directories(GrainveilUiPreview PRIVATE source)
+    target_link_libraries(GrainveilUiPreview PRIVATE Grainveil juce::juce_audio_utils juce::juce_dsp)
+    add_test(NAME GrainveilUiPreview COMMAND GrainveilUiPreview "${CMAKE_BINARY_DIR}/ui-previews")
+endif()
