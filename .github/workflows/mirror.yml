@@ -76,7 +76,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release view "${{ inputs.tag }}" --json body --jq .body > body.md
+          gh release view "${{ inputs.tag }}" --repo "$GITHUB_REPOSITORY" --json body --jq .body > body.md
           {
             cat body.md
             echo
@@ -85,7 +85,7 @@ jobs:
             cat checksums.txt
             echo '```'
           } > notes.md
-          gh release edit "${{ inputs.tag }}" --notes-file notes.md
+          gh release edit "${{ inputs.tag }}" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
 
       - name: Publish blob SHAs as a commit status
         env:
