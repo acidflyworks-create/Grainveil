@@ -1,0 +1,35 @@
+name: Temporary UI preview transfer
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/ui-preview-transfer.yml']
+permissions:
+  actions: read
+  contents: write
+  statuses: write
+jobs:
+  transfer:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 44092171438
+          name: Grainveil-UI-previews-Windows
+          github-token: ${{ github.token }}
+          path: previews
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          : > shas.txt
+          for f in previews/default-dpi100.png previews/display-synthetic-fixture.png; do
+            python3 - "$f" > payload.json <<'PY'
+          import base64, json, sys
+          with open(sys.argv[1], 'rb') as f:
+              print(json.dumps({'encoding': 'base64', 'content': base64.b64encode(f.read()).decode()}))
+          PY
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/blobs" --input payload.json --jq .sha >> shas.txt
+          done
+          desc=$(paste -sd, shas.txt)
+          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f state=success -f context=grainveil/ui-preview -f description="$desc" > /dev/null
