@@ -8,7 +8,7 @@ on:
         type: boolean
         default: true
   push:
-    branches: [main]
+    branches: ["**"]
     tags: ["v*"]
   pull_request:
     branches: [main]
