@@ -181,12 +181,16 @@ namespace GrainveilDsp
             TelemetrySnapshot telemetry;
             const int bufSize = circularBuffer.getBufferSize();
             const int writePos = circularBuffer.getWritePos();
+            // Render the active capture window, not the whole 16-second capacity.
+            // The write cursor points to the next slot, hence the newest sample is -1.
+            const int windowSamples = std::clamp(static_cast<int>(sampleRate * 0.001 * smoothedCaptureMs.getCurrentValue()),
+                                                 32, std::max(32, bufSize - 8));
             if (bufSize > 0)
             {
-                const int stride = std::max(1, bufSize / TelemetrySnapshot::waveformPoints);
                 for (int i = 0; i < TelemetrySnapshot::waveformPoints; ++i)
                 {
-                    const double pos = static_cast<double>(writePos - i * stride);
+                    const double offset = static_cast<double>(i) * (windowSamples - 1) / (TelemetrySnapshot::waveformPoints - 1);
+                    const double pos = static_cast<double>(writePos - 1) - offset;
                     const float sL = circularBuffer.readHermiteAt(0, pos);
                     const float sR = circularBuffer.readHermiteAt(1, pos);
                     telemetry.waveform[static_cast<size_t>(TelemetrySnapshot::waveformPoints - 1 - i)] = 0.5f * (sL + sR);
@@ -202,8 +206,9 @@ namespace GrainveilDsp
                     double rel = std::fmod(static_cast<double>(writePos) - v.readPos, bufSizeD);
                     if (rel < 0.0)
                         rel += bufSizeD;
-                    telemetry.grainPositions[static_cast<size_t>(count++)] =
-                        static_cast<float>(std::clamp(1.0 - (rel / bufSizeD), 0.0, 1.0));
+                    if (rel <= static_cast<double>(windowSamples))
+                        telemetry.grainPositions[static_cast<size_t>(count++)] =
+                            static_cast<float>(std::clamp(1.0 - (rel / static_cast<double>(windowSamples)), 0.0, 1.0));
                 }
             }
             telemetry.activeGrainCount = count;

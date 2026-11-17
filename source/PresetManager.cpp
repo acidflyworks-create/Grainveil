@@ -3,6 +3,8 @@
 #include "Parameters.h"
 #include <algorithm>
 #include <cmath>
+#include <locale>
+#include <sstream>
 
 namespace
 {
@@ -30,8 +32,11 @@ bool parseValues(const juce::XmlElement& element, PresetManager::Values& values)
         if (seen[index] || ! child->hasAttribute("value")) return false;
         const auto raw = child->getStringAttribute("value");
         if (raw.isEmpty() || ! raw.containsOnly("0123456789+-.eE")) return false;
-        const auto value = raw.getDoubleValue();
-        if (! std::isfinite(value) || value < 0.0 || value > 1.0) return false;
+        std::istringstream stream(raw.toStdString());
+        stream.imbue(std::locale::classic());
+        double value = 0.0;
+        char trailing = 0;
+        if (! (stream >> value) || (stream >> trailing) || ! std::isfinite(value) || value < 0.0 || value > 1.0) return false;
         parsed[index] = static_cast<float>(value);
         seen[index] = true;
     }

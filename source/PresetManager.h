@@ -12,6 +12,7 @@
 class PresetManager final : private juce::Timer
 {
 public:
+    static_assert(std::atomic<int>::is_always_lock_free, "Host program requests require lock-free integer atomics");
     static constexpr size_t parameterCount = 19;
     // Fixed slots keep JUCE's VST3 program-change step count stable for the
     // lifetime of an instance, including when the user saves a new preset.

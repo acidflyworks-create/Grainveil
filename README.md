@@ -30,25 +30,54 @@ the first scan, and allow the plugin in System Settings if Gatekeeper asks.
 После запуска workflow архивы с `.vst3` появляются на вкладке **Releases** и в артефактах
 запуска. Локально из Linux собрать эти два формата нельзя — нужен MSVC и Xcode/macOS SDK.
 
-## Editor redesign (stage B)
+## Editor and presets (stage C)
 
 The current editor uses a 1000 × 620 logical design grid. User resizing is constrained
 from 750 × 465 (75%) to 2000 × 1240 (200%) at the same aspect ratio. All existing
 controls live in one transformed design surface; if a host forces a different aspect
-ratio the surface is centered with letterboxing. The header's preset area is reserved
-for a later stage; the existing 8 programs and DSP are unchanged. A procedural graphite
-panel, custom rotary rings and freeze switch, selector/menu styling and embedded-font
-tooltips make up the stage B visuals. When a knob is dragged its name and formatted
+ratio the surface is centered with letterboxing. A procedural graphite panel, custom
+rotary rings and freeze switch, selector/menu styling and embedded-font tooltips make
+up the visuals. The preset bar switches programs, shows modified state and opens a
+categorized menu. When a knob is dragged its name and formatted
 value fade into the display's dedicated value strip; the editable numeric field remains
 available below the knob. Mode and freeze indicators follow the existing UI attachments.
 
-The screen intentionally says **BUFFER MONITOR UNAVAILABLE**. The existing DSP telemetry
-uses a sequence flag around concurrent reads/writes to a non-atomic struct, which is not a
-safe C++ cross-thread handoff. The editor no longer reads it. The waveform and grain
-marker renderer accepts a message-thread-owned snapshot, but connecting it to live DSP
-requires an independently agreed change to the audio-to-UI handoff. Likewise, the
-screen's `SESSION / LIVE` is a neutral session label, not a current preset name; a
-truthful preset-name display awaits stage C's thread-safe preset state.
+The screen shows the current preset, mode and freeze status. Its live waveform and
+grain markers use a bounded, lock-free atomic telemetry exchange published roughly
+30 times per second. Only telemetry publication changed; the granular signal path
+and parameter IDs are unchanged. The monitor remains unavailable until audio has
+been processed at least once.
+
+### Preset bar and host programs
+
+The arrows wrap across available programs; click the name for a categorized menu, use
+the wheel over the name, or Left/Right when the editor has focus. `Save` updates a user
+preset; on a factory or Init program it opens `Save As`. `Save As` refuses to overwrite
+an existing name. A star indicates a difference from the stored parameter values and
+clears if the values are returned to the baseline. User names are limited to 32
+characters and validated as cross-platform filenames.
+
+User presets are versioned `.gvpreset` XML files containing all 19 normalized
+parameters, stored in `Documents/Grainveil/Presets` on Windows and
+`~/Library/Audio/Presets/Grainveil` on macOS. UI file operations and host notifications
+run on the message thread; a host program request is queued atomically and applied on
+the next message-thread timer tick. The session state stores the selected preset identity
+and baseline as well as the current values; old sessions without this metadata still load
+as modified Init. If a user preset file is missing at project reopen, the audio parameters
+are restored but the selection falls back to Init.
+
+For stable VST3 program-change automation, each instance exposes **64 fixed user slots**
+(in addition to Init and the current eight factory programs); unused slots may be visible
+in the host's program list but are omitted from the plugin's menu and arrow navigation.
+Slot numbers are persisted in the files. Multiple instances coordinate writes; files
+created by another instance become visible when saving or on reopening the plugin. Avoid
+manually duplicating a `.gvpreset` file, as two files with the same slot conflict. A host
+may cache program names and require reopening the instance to refresh its list.
+
+The stage C factory table retains the existing eight programs; the requested 45 original
+presets are planned for stage D. Existing DSP smoothing covers many continuous parameters,
+but not every discrete transition; click-free switching across all material has not been
+verified and cannot be guaranteed without further audio-path work and listening tests.
 
 The UI embeds Lato Regular and Semibold under the SIL OFL 1.1 (see
 `THIRD_PARTY_LICENSES.md`). `UiTypography` measures single-line text, reduces it to a
@@ -64,9 +93,10 @@ For the automated design-grid and text-fitting harness, configure with
 `-DGRAINVEIL_BUILD_UI_TESTS=ON`, build, and run `ctest --test-dir build -C Release
 --output-on-failure`. It checks non-overlapping grid rectangles at min/default/max
 editor scales and 100/150/200% simulated DPI, fitting/ellipsis and text ink clipping.
-The test also renders the actual editor off-screen at min/default/max sizes and simulated
-100/150/200% DPI into `build/ui-previews/`, plus a clearly named synthetic monitor
-fixture. CI uploads these images as `Grainveil-UI-previews-Windows` and
+The tests also cover host program requests, wrap-around, user save/load, modified markers,
+session recall and concurrent telemetry. They render the actual editor off-screen at
+min/default/max sizes and simulated 100/150/200% DPI into `build/ui-previews/`, plus a
+clearly named synthetic monitor fixture. CI uploads these images as `Grainveil-UI-previews-Windows` and
 `Grainveil-UI-previews-macOS`. They are test renders, not screenshots from a DAW or
 proof of behavior at real OS display scale settings.
 
@@ -108,7 +138,7 @@ cp -R build/Grainveil_artefacts/Release/AU/Grainveil.component ~/Library/Audio/P
 
 ## Real-Time Safety & Hardening Checklist
 - **Zero allocations in `processBlock`**: All 32 `GrainVoice` instances, the 16-second stereo `CircularBuffer`, SVF filters, and `TelemetrySnapshot` are preallocated in `prepareToPlay`.
-- **No locks / I/O / blocking**: no mutexes, file I/O, or debug logging exist on the audio thread. The existing telemetry handoff is not safe for concurrent struct access and is currently not read by the editor (see Editor redesign above).
+- **No locks / I/O / blocking**: no mutexes, file I/O, or debug logging exist on the audio thread. The telemetry handoff uses lock-free atomics with bounded reads; preset file I/O is confined to the message thread.
 - **Denormals & Stability**: `juce::ScopedNoDenormals` in `processBlock`, NaN/Inf sanitization, `feedback` clamped to `0.95`, and `std::tanh` soft-clipping on feedback and wet sum.
 - **Parameter Smoothing**: `mix`, `inGain`, `outGain`, `captureTime`, `feedback`, `fbTone`, `grainSize`, `density`, `pitch`, and `tone` are smoothed via `juce::SmoothedValue`.
 
