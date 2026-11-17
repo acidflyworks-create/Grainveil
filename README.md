@@ -46,7 +46,7 @@ host/JUCE's responsibility; editor scale is independent of the OS display scale.
 
 UI assets (bytes): `Lato-Regular.ttf` 656,568; `Lato-SemiBold.ttf` 668,548;
 `OFL.txt` 4,407. Total under `assets/`: **1,329,523 bytes** (1,325,116 bytes
-embedded). CMake lists and checks every file in `assets/` against a 60 MiB budget.
+embedded). CMake lists and checks every file in `assets/` against a 60 MB (60,000,000-byte) budget.
 
 For the automated design-grid and text-fitting harness, configure with
 `-DGRAINVEIL_BUILD_UI_TESTS=ON`, build, and run `ctest --test-dir build -C Release

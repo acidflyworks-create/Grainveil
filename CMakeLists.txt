@@ -37,10 +37,10 @@ foreach(asset IN LISTS GRAINVEIL_ALL_ASSETS)
         message(STATUS "Grainveil UI asset: ${asset} (${asset_bytes} bytes)")
     endif()
 endforeach()
-set(GRAINVEIL_UI_ASSET_LIMIT 62914560) # 60 MiB
+set(GRAINVEIL_UI_ASSET_LIMIT 60000000) # 60 MB (decimal)
 message(STATUS "Grainveil embedded UI assets: ${GRAINVEIL_UI_ASSET_BYTES} / ${GRAINVEIL_UI_ASSET_LIMIT} bytes")
 if(GRAINVEIL_UI_ASSET_BYTES GREATER GRAINVEIL_UI_ASSET_LIMIT)
-    message(FATAL_ERROR "Grainveil UI assets exceed the 60 MiB budget (${GRAINVEIL_UI_ASSET_BYTES} bytes).")
+    message(FATAL_ERROR "Grainveil UI assets exceed the 60 MB budget (${GRAINVEIL_UI_ASSET_BYTES} bytes).")
 endif()
 juce_add_binary_data(GrainveilAssets SOURCES ${GRAINVEIL_UI_ASSETS})
 
