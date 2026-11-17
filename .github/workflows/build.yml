@@ -137,10 +137,10 @@ jobs:
           path: artefacts
           merge-multiple: true
 
-      - name: List release assets
+      - name: List release assets and checksums
         run: |
           ls -lh artefacts
-          sha256sum artefacts/*.zip
+          sha256sum artefacts/*.zip | tee checksums.txt
 
       - name: Create release
         env:
@@ -164,6 +164,13 @@ jobs:
           `~/Library/Audio/Plug-Ins/VST3/` on macOS). Unsigned builds: on macOS remove
           the quarantine attribute with `xattr -dr com.apple.quarantine Grainveil.vst3`.
           EOF
+          {
+            echo
+            echo "## SHA-256 checksums"
+            echo '```'
+            cat checksums.txt
+            echo '```'
+          } >> notes.md
           gh release create "$TAG" artefacts/*.zip \
             --repo "$GITHUB_REPOSITORY" \
             --title "Grainveil $TAG" \

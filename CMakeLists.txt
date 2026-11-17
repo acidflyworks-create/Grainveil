@@ -31,6 +31,7 @@ set(GRAINVEIL_FORMATS "${GRAINVEIL_DEFAULT_FORMATS}" CACHE STRING "Plugin format
 
 juce_add_plugin(Grainveil
     COMPANY_NAME                "Grainveil Audio"
+    BUNDLE_ID                   "com.grainveilaudio.grainveil"
     IS_SYNTH                    FALSE
     NEEDS_MIDI_INPUT            FALSE
     NEEDS_MIDI_OUTPUT           FALSE
