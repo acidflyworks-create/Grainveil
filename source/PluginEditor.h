@@ -6,6 +6,7 @@
 #include "ui/OledDisplay.h"
 #include "ui/Knob.h"
 #include "ui/FreezeButton.h"
+#include "ui/PresetBar.h"
 
 class GrainveilAudioProcessorEditor final : public juce::AudioProcessorEditor,
                                             private juce::Timer,
@@ -17,6 +18,7 @@ public:
 
     void paint(juce::Graphics&) override;
     void resized() override;
+    bool keyPressed(const juce::KeyPress&) override;
 
 private:
     void timerCallback() override;
@@ -35,6 +37,8 @@ private:
     GrainveilLookAndFeel lookAndFeel;
     DesignSurface designSurface;
     OledDisplay oledDisplay;
+    PresetBar presetBar;
+    GrainveilDsp::TelemetrySnapshot telemetrySnapshot;
     juce::TooltipWindow tooltipWindow;
     GrainveilKnob* activeKnob = nullptr;
 

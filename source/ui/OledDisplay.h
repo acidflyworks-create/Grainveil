@@ -5,13 +5,14 @@
 
 // All methods are called on the message thread. The display deliberately has no
 // direct access to DSP memory; a future safe handoff can provide monitor data.
-class OledDisplay final : public juce::Component
+class OledDisplay final : public juce::Component, public juce::SettableTooltipClient
 {
 public:
     static constexpr size_t waveformPoints = 128;
     static constexpr size_t maxGrains = 32;
 
     void setControlState(const juce::String& mode, bool frozen);
+    void setPresetName(const juce::String& name, bool modified);
     void setMonitorData(const std::array<float, waveformPoints>& wave,
                         const std::array<float, maxGrains>& markers, int count);
     void setMonitorUnavailable();
@@ -28,7 +29,8 @@ private:
     bool monitorAvailable = false;
     bool isFrozen = false;
     bool parameterHeld = false;
-    juce::String modeName { "Cloud" }, parameterName, parameterValue;
+    juce::String modeName { "Cloud" }, presetName { "Init" }, parameterName, parameterValue;
+    bool presetModified = false;
     double fadeDeadlineMs = 0.0;
     float parameterOpacity = 0.0f;
 };

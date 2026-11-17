@@ -3,11 +3,12 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Parameters.h"
 #include "dsp/GrainEngine.h"
+#include "PresetManager.h"
 
 class GrainveilAudioProcessor final : public juce::AudioProcessor
 {
 public:
-    GrainveilAudioProcessor();
+    explicit GrainveilAudioProcessor(juce::File presetDirectory = {});
     ~GrainveilAudioProcessor() override = default;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
@@ -35,15 +36,15 @@ public:
     void setStateInformation(const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() noexcept { return apvts; }
-    void getTelemetrySnapshot(GrainveilDsp::TelemetrySnapshot& dest) const noexcept
+    PresetManager& getPresetManager() noexcept { return *presetManager; }
+    bool getTelemetrySnapshot(GrainveilDsp::TelemetrySnapshot& dest) const noexcept
     {
-        grainEngine.copyTelemetry(dest);
+        return grainEngine.copyTelemetry(dest);
     }
 
 private:
-    void applyPreset(int index);
-    int currentProgramIndex = 0;
     juce::AudioProcessorValueTreeState apvts;
+    std::unique_ptr<PresetManager> presetManager;
 
     std::atomic<float>* mixParam         = nullptr;
     std::atomic<float>* inGainParam      = nullptr;

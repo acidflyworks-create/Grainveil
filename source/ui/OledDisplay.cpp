@@ -13,6 +13,17 @@ void OledDisplay::setControlState(const juce::String& mode, bool frozen)
     }
 }
 
+void OledDisplay::setPresetName(const juce::String& name, bool modified)
+{
+    if (presetName != name || presetModified != modified)
+    {
+        presetName = name;
+        presetModified = modified;
+        setTooltip(name + (modified ? " (modified)" : ""));
+        repaint();
+    }
+}
+
 void OledDisplay::setMonitorData(const std::array<float, waveformPoints>& wave,
                                  const std::array<float, maxGrains>& markers, int count)
 {
@@ -79,16 +90,20 @@ void OledDisplay::paint(juce::Graphics& g)
 
     auto inner = screen.reduced(13.0f, 8.0f);
     auto header = inner.removeFromTop(21.0f);
-    auto session = header.removeFromLeft(137.0f);
+    auto session = header.removeFromLeft(180.0f);
     header.removeFromLeft(6.0f);
     auto state = header.removeFromRight(72.0f);
     header.removeFromRight(6.0f);
     auto mode = header;
 
-    g.setColour(Palette::screenText.withAlpha(0.6f));
-    drawFittedText(g, "SESSION", session.removeFromLeft(57.0f), 9.5f, 8.0f, juce::Justification::centredLeft, true);
+    auto modifiedZone = session.removeFromRight(12.0f);
     g.setColour(juce::Colour(0xffd5e3c9));
-    drawFittedText(g, "LIVE", session, 11.0f, 8.0f, juce::Justification::centredLeft, true);
+    drawFittedText(g, presetName, session, 11.0f, 8.0f, juce::Justification::centredLeft, true);
+    if (presetModified)
+    {
+        g.setColour(Palette::warmBright);
+        drawFittedText(g, "*", modifiedZone, 12.0f, 8.0f, juce::Justification::centred, true);
+    }
     g.setColour(Palette::screenText);
     drawFittedText(g, modeName.toUpperCase(), mode, 11.5f, 8.0f, juce::Justification::centred, true);
     g.setColour(isFrozen ? Palette::warmBright : Palette::screenText.withAlpha(0.5f));

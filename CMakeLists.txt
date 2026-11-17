@@ -81,9 +81,11 @@ juce_add_plugin(Grainveil
 target_sources(Grainveil
     PRIVATE
         source/PluginProcessor.cpp
+        source/PresetManager.cpp
         source/PluginEditor.cpp
         source/ui/GrainveilLookAndFeel.cpp
         source/ui/OledDisplay.cpp
+        source/ui/PresetBar.cpp
         source/ui/UiTypography.cpp
 )
 
@@ -116,4 +118,10 @@ if(GRAINVEIL_BUILD_UI_TESTS)
     target_include_directories(GrainveilUiPreview PRIVATE source)
     target_link_libraries(GrainveilUiPreview PRIVATE Grainveil juce::juce_audio_utils juce::juce_dsp)
     add_test(NAME GrainveilUiPreview COMMAND GrainveilUiPreview "${CMAKE_BINARY_DIR}/ui-previews")
+
+    juce_add_console_app(GrainveilPresetTests PRODUCT_NAME "Grainveil Preset Tests")
+    target_sources(GrainveilPresetTests PRIVATE tests/PresetTests.cpp)
+    target_include_directories(GrainveilPresetTests PRIVATE source)
+    target_link_libraries(GrainveilPresetTests PRIVATE Grainveil juce::juce_audio_utils juce::juce_dsp)
+    add_test(NAME GrainveilPresetsAndTelemetry COMMAND GrainveilPresetTests)
 endif()

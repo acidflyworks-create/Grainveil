@@ -2,6 +2,7 @@
 
 #include "CircularBuffer.h"
 #include "GrainScheduler.h"
+#include "TelemetryExchange.h"
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_dsp/juce_dsp.h>
 #include <algorithm>
@@ -32,15 +33,7 @@ namespace GrainveilDsp
         int   mode          = 0;
     };
 
-    struct TelemetrySnapshot
-    {
-        static constexpr int waveformPoints = 128;
-        std::array<float, waveformPoints> waveform {};
-        std::array<float, GrainScheduler::poolSize> grainPositions {};
-        int activeGrainCount = 0;
-        bool frozen = false;
-        int mode = 0;
-    };
+    static_assert(GrainScheduler::poolSize == TelemetrySnapshot::maxGrains, "Telemetry grain capacity must match the scheduler");
 
     class GrainEngine
     {
@@ -86,6 +79,7 @@ namespace GrainveilDsp
             wetToneFilter.reset();
             prevWetL = 0.0f;
             prevWetR = 0.0f;
+            samplesUntilTelemetry = 0;
         }
 
         void process(juce::AudioBuffer<float>& buffer, const EngineParams& params) noexcept
@@ -167,23 +161,24 @@ namespace GrainveilDsp
                 right[i] = (dryR * dryMix + wetR * wetMix) * outGain;
             }
 
-            updateTelemetry(params.freeze, params.mode);
+            // Telemetry alone is decimated to about 30 Hz; audio processing is unchanged.
+            samplesUntilTelemetry -= numSamples;
+            if (samplesUntilTelemetry <= 0)
+            {
+                updateTelemetry(params.freeze, params.mode);
+                samplesUntilTelemetry = std::max(1, static_cast<int>(sampleRate / 30.0));
+            }
         }
 
-        void copyTelemetry(TelemetrySnapshot& dest) const noexcept
+        bool copyTelemetry(TelemetrySnapshot& dest) const noexcept
         {
-            const uint32_t seq1 = telemetrySeq.load(std::memory_order_acquire);
-            if ((seq1 & 1u) != 0u)
-                return;
-            dest = telemetry;
+            return telemetryExchange.copy(dest);
         }
 
     private:
         void updateTelemetry(bool frozen, int mode) noexcept
         {
-            const uint32_t seq = telemetrySeq.load(std::memory_order_relaxed);
-            telemetrySeq.store(seq + 1u, std::memory_order_release);
-
+            TelemetrySnapshot telemetry;
             const int bufSize = circularBuffer.getBufferSize();
             const int writePos = circularBuffer.getWritePos();
             if (bufSize > 0)
@@ -215,7 +210,7 @@ namespace GrainveilDsp
             telemetry.frozen = frozen;
             telemetry.mode = mode;
 
-            telemetrySeq.store(seq + 2u, std::memory_order_release);
+            telemetryExchange.publish(telemetry);
         }
 
         static float sanitize(float x) noexcept
@@ -232,8 +227,8 @@ namespace GrainveilDsp
         float prevWetL = 0.0f;
         float prevWetR = 0.0f;
 
-        TelemetrySnapshot telemetry;
-        std::atomic<uint32_t> telemetrySeq { 0 };
+        TelemetryExchange telemetryExchange;
+        int samplesUntilTelemetry = 0;
 
         juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedMix;
         juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedInGain;

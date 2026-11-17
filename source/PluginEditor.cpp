@@ -5,7 +5,7 @@
 #include "ui/Palette.h"
 
 GrainveilAudioProcessorEditor::GrainveilAudioProcessorEditor(GrainveilAudioProcessor& p)
-    : AudioProcessorEditor(&p), audioProcessor(p), tooltipWindow(this, 650)
+    : AudioProcessorEditor(&p), audioProcessor(p), presetBar(p.getPresetManager()), tooltipWindow(this, 650)
 {
     setLookAndFeel(&lookAndFeel);
     addAndMakeVisible(designSurface);
@@ -13,6 +13,9 @@ GrainveilAudioProcessorEditor::GrainveilAudioProcessorEditor(GrainveilAudioProce
     designSurface.setInterceptsMouseClicks(false, true);
 
     designSurface.addAndMakeVisible(oledDisplay);
+    designSurface.addAndMakeVisible(presetBar);
+    setWantsKeyboardFocus(true);
+    setMouseClickGrabsKeyboardFocus(true);
 
     modeCombo.addItemList(GrainveilParams::getModeNames(), 1);
     modeCombo.setTitle("Grain mode");
@@ -94,8 +97,12 @@ void GrainveilAudioProcessorEditor::setupKnob(GrainveilKnob& slider, juce::Label
 
 void GrainveilAudioProcessorEditor::timerCallback()
 {
-    // The old DSP telemetry object is not a safe cross-thread snapshot. Avoid
-    // touching it until its producer can be changed under an agreed scope.
+    if (audioProcessor.getTelemetrySnapshot(telemetrySnapshot))
+        oledDisplay.setMonitorData(telemetrySnapshot.waveform, telemetrySnapshot.grainPositions,
+                                   telemetrySnapshot.activeGrainCount);
+    auto& presets = audioProcessor.getPresetManager();
+    presetBar.refresh();
+    oledDisplay.setPresetName(presets.getProgramName(presets.getCurrentProgram()), presets.isModified());
     oledDisplay.setControlState(modeCombo.getText(), freezeButton.getToggleState());
     oledDisplay.advanceAnimation();
 }
@@ -181,8 +188,6 @@ void GrainveilAudioProcessorEditor::DesignSurface::paint(juce::Graphics& g)
     g.setColour(Palette::text);
     drawFittedText(g, "GRAINVEIL", { 78.0f, 33.0f, 155.0f, 23.0f }, 18.0f, 12.0f, juce::Justification::centredLeft, true);
     g.setColour(Palette::muted);
-    drawFittedText(g, "STEREO GRANULAR PROCESSOR", Grid::presetZone.toFloat(), 10.0f, 8.0f,
-                   juce::Justification::centred, true);
     drawFittedText(g, "SIGNAL  /  SPACE", { 782.0f, 34.0f, 168.0f, 20.0f }, 10.0f, 8.0f,
                    juce::Justification::centredRight, true);
 
@@ -200,6 +205,16 @@ void GrainveilAudioProcessorEditor::DesignSurface::paint(juce::Graphics& g)
     g.drawHorizontalLine(443, 49.0f, 951.0f);
 }
 
+bool GrainveilAudioProcessorEditor::keyPressed(const juce::KeyPress& key)
+{
+    if (key == juce::KeyPress::leftKey || key == juce::KeyPress::rightKey)
+    {
+        presetBar.step(key == juce::KeyPress::leftKey ? -1 : 1);
+        return true;
+    }
+    return false;
+}
+
 void GrainveilAudioProcessorEditor::resized()
 {
     using namespace GrainveilUI::Grid;
@@ -213,6 +228,7 @@ void GrainveilAudioProcessorEditor::resized()
     modeCombo.setBounds(modeField);
     freezeButton.setBounds(freezeField);
     oledDisplay.setBounds(display);
+    presetBar.setBounds(presetZone);
 
     auto place = [](const KnobCell& cell, juce::Slider& slider, juce::Label& label)
     {
