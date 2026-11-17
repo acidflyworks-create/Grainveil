@@ -22,6 +22,7 @@ public:
     PresetManager(juce::AudioProcessor&, juce::AudioProcessorValueTreeState&, juce::File directory = {});
     ~PresetManager() override;
 
+    static int initProgram() noexcept;
     int getNumPrograms() const noexcept;
     int getCurrentProgram() const noexcept;
     juce::String getProgramName(int index) const;
@@ -42,7 +43,6 @@ public:
 private:
     struct UserPreset { juce::String name; juce::File file; };
     struct Catalog { std::vector<UserPreset> users; };
-    static constexpr int factoryOffset = 1; // index zero is Init
     static int userOffset() noexcept;
     void timerCallback() override;
     Values currentValues() const noexcept;

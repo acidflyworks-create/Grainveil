@@ -72,7 +72,11 @@ in the host's program list but are omitted from the plugin's menu and arrow navi
 Slot numbers are persisted in the files. Multiple instances coordinate writes; files
 created by another instance become visible when saving or on reopening the plugin. Avoid
 manually duplicating a `.gvpreset` file, as two files with the same slot conflict. A host
-may cache program names and require reopening the instance to refresh its list.
+may cache program names and require reopening the instance to refresh its list. The original
+eight factory program indices remain 0–7, but VST3 represents program automation using
+a normalized value and the enlarged program list changes its step count. Existing DAW
+program-change automation from the earlier eight-program build may therefore map to a
+different program; verify it before replacing that build. Saved parameter state still loads.
 
 The stage C factory table retains the existing eight programs; the requested 45 original
 presets are planned for stage D. Existing DSP smoothing covers many continuous parameters,

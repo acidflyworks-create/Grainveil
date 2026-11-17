@@ -56,7 +56,8 @@ void writeValues(juce::XmlElement& parent, const PresetManager::Values& values)
 }
 }
 
-int PresetManager::userOffset() noexcept { return factoryOffset + static_cast<int>(GrainveilFactory::presets.size()); }
+int PresetManager::initProgram() noexcept { return static_cast<int>(GrainveilFactory::presets.size()); }
+int PresetManager::userOffset() noexcept { return initProgram() + 1; }
 
 PresetManager::PresetManager(juce::AudioProcessor& owner, juce::AudioProcessorValueTreeState& state, juce::File directory)
     : processor(owner), apvts(state), presetDirectory(std::move(directory))
@@ -77,6 +78,7 @@ PresetManager::PresetManager(juce::AudioProcessor& owner, juce::AudioProcessorVa
         jassert(parameters[i] != nullptr);
     }
     captureBaseline(defaultValues());
+    currentIndex.store(initProgram(), std::memory_order_relaxed);
 
     auto initial = std::make_unique<Catalog>();
     initial->users.resize(static_cast<size_t>(maxUserPresets));
@@ -116,9 +118,9 @@ int PresetManager::getCurrentProgram() const noexcept
 
 juce::String PresetManager::getProgramName(int index) const
 {
-    if (index == 0) return "Init";
-    if (index >= factoryOffset && index < userOffset())
-        return GrainveilFactory::presets[static_cast<size_t>(index - factoryOffset)].name;
+    if (index == initProgram()) return "Init";
+    if (index >= 0 && index < initProgram())
+        return GrainveilFactory::presets[static_cast<size_t>(index)].name;
     const auto* catalog = publishedCatalog.load(std::memory_order_acquire);
     const int user = index - userOffset();
     if (catalog == nullptr || user < 0 || user >= maxUserPresets) return {};
@@ -128,9 +130,9 @@ juce::String PresetManager::getProgramName(int index) const
 
 juce::String PresetManager::getProgramCategory(int index) const
 {
-    if (index == 0) return "Init";
-    if (index >= factoryOffset && index < userOffset())
-        return GrainveilFactory::presets[static_cast<size_t>(index - factoryOffset)].category;
+    if (index == initProgram()) return "Init";
+    if (index >= 0 && index < initProgram())
+        return GrainveilFactory::presets[static_cast<size_t>(index)].category;
     return isUserProgram(index) ? juce::String("User") : juce::String();
 }
 
@@ -159,8 +161,8 @@ void PresetManager::servicePendingProgram()
     const int index = pendingIndex.exchange(-1, std::memory_order_acq_rel);
     if (! isProgramAvailable(index)) return;
     Values values;
-    if (index == 0) values = defaultValues();
-    else if (index < userOffset()) values = factoryValues(index - factoryOffset);
+    if (index == initProgram()) values = defaultValues();
+    else if (index < initProgram()) values = factoryValues(index);
     else
     {
         const auto* catalog = publishedCatalog.load(std::memory_order_acquire);
@@ -358,7 +360,7 @@ void PresetManager::writeSessionMetadata(juce::XmlElement& state) const
     auto* meta = state.createNewChildElement("GrainveilProgram");
     meta->setAttribute("version", sessionVersion);
     const auto index = currentIndex.load(std::memory_order_acquire);
-    meta->setAttribute("type", index == 0 ? "init" : (isUserProgram(index) ? "user" : "factory"));
+    meta->setAttribute("type", index == initProgram() ? "init" : (isUserProgram(index) ? "user" : "factory"));
     meta->setAttribute("name", getProgramName(index));
     Values values {};
     for (size_t i = 0; i < values.size(); ++i) values[i] = baseline[i].load(std::memory_order_acquire);
@@ -368,14 +370,18 @@ void PresetManager::writeSessionMetadata(juce::XmlElement& state) const
 void PresetManager::restoreSessionMetadata(const juce::XmlElement* meta)
 {
     Values values = defaultValues();
-    int index = 0;
+    int index = initProgram();
     if (meta != nullptr && meta->getIntAttribute("version", -1) == sessionVersion && parseValues(*meta, values))
     {
         const auto type = meta->getStringAttribute("type");
         const auto name = meta->getStringAttribute("name");
-        if (type == "user") index = std::max(0, findUser(name));
+        if (type == "user")
+        {
+            const auto found = findUser(name);
+            if (found >= 0) index = found;
+        }
         else if (type == "factory")
-            for (int i = factoryOffset; i < userOffset(); ++i)
+            for (int i = 0; i < initProgram(); ++i)
                 if (getProgramName(i) == name) { index = i; break; }
     }
     pendingIndex.store(-1, std::memory_order_release);

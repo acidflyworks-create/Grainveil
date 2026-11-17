@@ -27,22 +27,23 @@ int main()
         auto& manager = p.getPresetManager();
         auto* mix = p.getAPVTS().getParameter(GrainveilParams::mix);
         auto* pitchRand = p.getAPVTS().getParameter(GrainveilParams::pitchRand);
-        check(p.getCurrentProgram() == 0 && p.getProgramName(0) == "Init", "initial program");
+        check(p.getCurrentProgram() == PresetManager::initProgram() && p.getProgramName(p.getCurrentProgram()) == "Init", "initial program");
+        check(p.getProgramName(0) == "Ambient Wash", "original factory program indices preserved");
         check(! manager.isModified(), "initial state should be unmodified");
         check(p.getNumPrograms() == 9 + PresetManager::maxUserPresets, "stable host program count");
 
         const float before = mix->getValue();
-        std::thread host([&] { p.setCurrentProgram(1); });
+        std::thread host([&] { p.setCurrentProgram(0); });
         host.join();
-        check(p.getCurrentProgram() == 1, "host request visible immediately");
+        check(p.getCurrentProgram() == 0, "host request visible immediately");
         check(near(mix->getValue(), before), "host request must not apply parameters on caller thread");
         manager.servicePendingProgram();
         check(near(mix->convertFrom0to1(mix->getValue()), .55f), "factory program loads on message thread");
         check(! manager.isModified(), "loaded program unmodified");
-        p.setCurrentProgram(5);
+        p.setCurrentProgram(4);
         manager.servicePendingProgram();
         check(pitchRand->convertFrom0to1(pitchRand->getValue()) > 0.5f, "pitch cloud override");
-        p.setCurrentProgram(2);
+        p.setCurrentProgram(1);
         manager.servicePendingProgram();
         check(near(pitchRand->convertFrom0to1(pitchRand->getValue()), 0.0f), "factory load resets unspecified parameters");
         mix->setValueNotifyingHost(mix->convertTo0to1(.22f));
@@ -54,10 +55,10 @@ int main()
         p.setCurrentProgram(0);
         manager.servicePendingProgram();
         bar.step(-1);
-        check(p.getCurrentProgram() == 8, "previous wraps over unused slots");
+        check(p.getCurrentProgram() == PresetManager::initProgram(), "previous wraps over unused slots");
         manager.servicePendingProgram();
         bar.step(1);
-        check(p.getCurrentProgram() == 0, "next wraps to init");
+        check(p.getCurrentProgram() == 0, "next wraps to first factory preset");
         manager.servicePendingProgram();
         juce::String error;
         check(PresetManager::validateName("../bad").isNotEmpty(), "path traversal rejected");
@@ -104,11 +105,11 @@ int main()
         const auto presetFile = root.getChildFile(longName + ".gvpreset");
         const auto validFile = presetFile.loadFileAsString();
         check(presetFile.replaceWithText("<GrainveilPreset version=\"1\"><Parameter id=\"mix\" value=\"nan\"/></GrainveilPreset>"), "write corrupt test preset");
-        p.setCurrentProgram(0);
+        p.setCurrentProgram(PresetManager::initProgram());
         manager.servicePendingProgram();
         p.setCurrentProgram(userProgram);
         manager.servicePendingProgram();
-        check(p.getCurrentProgram() == 0, "invalid preset must not partially load or change selection");
+        check(p.getCurrentProgram() == PresetManager::initProgram(), "invalid preset must not partially load or change selection");
         check(manager.consumeError().isNotEmpty(), "invalid preset reports an error");
         check(presetFile.replaceWithText(validFile), "restore test preset");
 

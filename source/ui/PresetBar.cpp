@@ -159,20 +159,20 @@ void PresetBar::showMenu()
 {
     juce::PopupMenu root;
     root.setLookAndFeel(&getLookAndFeel());
-    root.addItem(1, "Init", true, manager.getCurrentProgram() == 0);
+    root.addItem(PresetManager::initProgram() + 1, "Init", true, manager.getCurrentProgram() == PresetManager::initProgram());
     root.addSeparator();
     juce::StringArray categories;
-    for (int i = 1; i < manager.getNumPrograms(); ++i)
+    for (int i = 0; i < manager.getNumPrograms(); ++i)
     {
-        if (! manager.isProgramAvailable(i)) continue;
+        if (i == PresetManager::initProgram() || ! manager.isProgramAvailable(i)) continue;
         auto category = manager.getProgramCategory(i);
         if (! categories.contains(category)) categories.add(category);
     }
     for (const auto& category : categories)
     {
         juce::PopupMenu submenu;
-        for (int i = 1; i < manager.getNumPrograms(); ++i)
-            if (manager.isProgramAvailable(i) && manager.getProgramCategory(i) == category)
+        for (int i = 0; i < manager.getNumPrograms(); ++i)
+            if (i != PresetManager::initProgram() && manager.isProgramAvailable(i) && manager.getProgramCategory(i) == category)
                 submenu.addItem(i + 1, manager.getProgramName(i), true, manager.getCurrentProgram() == i);
         root.addSubMenu(category, submenu);
     }
