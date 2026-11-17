@@ -35,6 +35,18 @@ target and fails above the **200 MB** hard limit. Machine-readable asset and
 per-format reports are uploaded as `Grainveil-size-reports-Windows` and
 `Grainveil-size-reports-macOS`. Size checks are performed before ZIP packaging.
 
+Measured in [CI run 44161856839](https://github.com/acidflyworks-create/Grainveil/actions/runs/44161856839)
+(commit `de7b609`, Release):
+
+| Bundle | Uncompressed regular files | Target < 40 MB |
+| --- | ---: | --- |
+| Windows x64 VST3 | 7,683,434 bytes | pass |
+| macOS universal VST3 | 10,887,652 bytes | pass |
+| macOS universal AU | 10,686,896 bytes | pass |
+
+All are below the 200 MB hard limit. These are plugin bundle sizes, not ZIP sizes
+or a measurement of disk blocks consumed by an installed copy.
+
 ## Automated UI checks
 
 Run on native Windows/macOS runners with `-DGRAINVEIL_BUILD_UI_TESTS=ON` and
@@ -52,9 +64,12 @@ Run on native Windows/macOS runners with `-DGRAINVEIL_BUILD_UI_TESTS=ON` and
   original bank compatibility, host requests, user preset/state recall and telemetry.
 
 CI uploads the PNGs as `Grainveil-UI-previews-Windows` and
-`Grainveil-UI-previews-macOS`. These are off-screen renders with a simulated graphics
-transform, **not screenshots of a DAW or physical-monitor DPI tests**. Bounds and
-text tests do not exhaustively prove that every popup, editable field, host chrome,
+`Grainveil-UI-previews-macOS`. From run 44161856839, the normal Windows/macOS default
+renders, the long-name Windows/macOS minimum renders, the Windows long-name default
+render and the macOS maximum render were also visually inspected; no overlapping text
+was observed in these specific images. These are off-screen renders with a simulated
+graphics transform, **not screenshots of a DAW or physical-monitor DPI tests**. Bounds
+and text tests do not exhaustively prove that every popup, editable field, host chrome,
 translation or glyph will render without overlap.
 
 ## Manual acceptance checklist — not yet performed
