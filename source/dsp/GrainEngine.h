@@ -1,0 +1,249 @@
+#pragma once
+
+#include "CircularBuffer.h"
+#include "GrainScheduler.h"
+#include <juce_audio_basics/juce_audio_basics.h>
+#include <juce_dsp/juce_dsp.h>
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <cmath>
+#include <cstdint>
+
+namespace GrainveilDsp
+{
+    struct EngineParams
+    {
+        float mix           = 0.5f;
+        float inGainDb      = 0.0f;
+        float outGainDb     = 0.0f;
+        bool  freeze        = false;
+        float captureTimeMs = 1000.0f;
+        float feedback      = 0.25f;
+        float fbTone        = 0.5f;
+        float grainSizeMs   = 120.0f;
+        float densityHz     = 10.0f;
+        float scatter       = 0.2f;
+        float reverseAmt    = 0.0f;
+        float pitchSt       = 0.0f;
+        float pitchRand     = 0.0f;
+        float spread        = 0.5f;
+        float tone          = 0.7f;
+        int   mode          = 0;
+    };
+
+    struct TelemetrySnapshot
+    {
+        static constexpr int waveformPoints = 128;
+        std::array<float, waveformPoints> waveform {};
+        std::array<float, GrainScheduler::poolSize> grainPositions {};
+        int activeGrainCount = 0;
+        bool frozen = false;
+        int mode = 0;
+    };
+
+    class GrainEngine
+    {
+    public:
+        void prepare(double newSampleRate)
+        {
+            sampleRate = std::max(1.0, newSampleRate);
+            circularBuffer.prepare(sampleRate);
+            scheduler.prepare(sampleRate);
+
+            juce::dsp::ProcessSpec spec;
+            spec.sampleRate       = sampleRate;
+            spec.maximumBlockSize = 1;
+            spec.numChannels      = 2;
+
+            fbFilter.prepare(spec);
+            fbFilter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
+            fbFilter.setResonance(0.7071f);
+
+            wetToneFilter.prepare(spec);
+            wetToneFilter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
+            wetToneFilter.setResonance(0.7071f);
+
+            smoothedMix.reset(sampleRate, 0.02);
+            smoothedInGain.reset(sampleRate, 0.02);
+            smoothedOutGain.reset(sampleRate, 0.02);
+            smoothedCaptureMs.reset(sampleRate, 0.05);
+            smoothedFeedback.reset(sampleRate, 0.02);
+            smoothedFbTone.reset(sampleRate, 0.03);
+            smoothedGrainSizeMs.reset(sampleRate, 0.03);
+            smoothedDensityHz.reset(sampleRate, 0.03);
+            smoothedPitchSt.reset(sampleRate, 0.02);
+            smoothedTone.reset(sampleRate, 0.03);
+
+            reset();
+        }
+
+        void reset()
+        {
+            circularBuffer.clear();
+            scheduler.reset();
+            fbFilter.reset();
+            wetToneFilter.reset();
+            prevWetL = 0.0f;
+            prevWetR = 0.0f;
+        }
+
+        void process(juce::AudioBuffer<float>& buffer, const EngineParams& params) noexcept
+        {
+            const int numSamples = buffer.getNumSamples();
+            if (numSamples <= 0 || buffer.getNumChannels() < 2)
+                return;
+
+            smoothedMix.setTargetValue(params.mix);
+            smoothedInGain.setTargetValue(juce::Decibels::decibelsToGain(params.inGainDb));
+            smoothedOutGain.setTargetValue(juce::Decibels::decibelsToGain(params.outGainDb));
+            smoothedCaptureMs.setTargetValue(params.captureTimeMs);
+            smoothedFeedback.setTargetValue(std::clamp(params.feedback, 0.0f, 0.95f));
+            smoothedFbTone.setTargetValue(std::clamp(params.fbTone, 0.0f, 1.0f));
+            smoothedGrainSizeMs.setTargetValue(params.grainSizeMs);
+            smoothedDensityHz.setTargetValue(params.densityHz);
+            smoothedPitchSt.setTargetValue(params.pitchSt);
+            smoothedTone.setTargetValue(std::clamp(params.tone, 0.0f, 1.0f));
+
+            auto* left  = buffer.getWritePointer(0);
+            auto* right = buffer.getWritePointer(1);
+
+            const float maxCutoff = static_cast<float>(std::min(18000.0, sampleRate * 0.45));
+
+            for (int i = 0; i < numSamples; ++i)
+            {
+                const float wetMix     = smoothedMix.getNextValue();
+                const float dryMix     = 1.0f - wetMix;
+                const float inGain     = smoothedInGain.getNextValue();
+                const float outGain    = smoothedOutGain.getNextValue();
+                const double capMs     = static_cast<double>(smoothedCaptureMs.getNextValue());
+                const float fbAmount   = smoothedFeedback.getNextValue();
+                const float fbToneVal  = smoothedFbTone.getNextValue();
+                const double sizeMs    = static_cast<double>(smoothedGrainSizeMs.getNextValue());
+                const double densityHz = static_cast<double>(smoothedDensityHz.getNextValue());
+                const float pitchSt    = smoothedPitchSt.getNextValue();
+                const float toneVal    = smoothedTone.getNextValue();
+
+                const float dryL = left[i];
+                const float dryR = right[i];
+
+                // Feedback vs Freeze interaction:
+                // When freeze is active, CircularBuffer::writeSample() halts all writes
+                // (both live input and feedback recirculation) so the frozen buffer contents
+                // remain completely intact and never overwrite or bloom out of control.
+                const float fbCutoff = std::min(maxCutoff, 400.0f * std::pow(40.0f, fbToneVal));
+                fbFilter.setCutoffFrequency(fbCutoff);
+
+                const float fbL = std::tanh(fbFilter.processSample(0, sanitize(prevWetL)) * 0.85f) * fbAmount;
+                const float fbR = std::tanh(fbFilter.processSample(1, sanitize(prevWetR)) * 0.85f) * fbAmount;
+
+                circularBuffer.writeSample(dryL * inGain + fbL, dryR * inGain + fbR, params.freeze);
+
+                float wetL = 0.0f;
+                float wetR = 0.0f;
+                scheduler.processSample(circularBuffer,
+                                        params.mode,
+                                        capMs,
+                                        sizeMs,
+                                        densityHz,
+                                        params.scatter,
+                                        params.reverseAmt,
+                                        pitchSt,
+                                        params.pitchRand,
+                                        params.spread,
+                                        wetL,
+                                        wetR);
+
+                const float wetCutoff = std::min(maxCutoff, 600.0f * std::pow(30.0f, toneVal));
+                wetToneFilter.setCutoffFrequency(wetCutoff);
+
+                wetL = std::tanh(wetToneFilter.processSample(0, sanitize(wetL)));
+                wetR = std::tanh(wetToneFilter.processSample(1, sanitize(wetR)));
+
+                prevWetL = wetL;
+                prevWetR = wetR;
+
+                left[i]  = (dryL * dryMix + wetL * wetMix) * outGain;
+                right[i] = (dryR * dryMix + wetR * wetMix) * outGain;
+            }
+
+            updateTelemetry(params.freeze, params.mode);
+        }
+
+        void copyTelemetry(TelemetrySnapshot& dest) const noexcept
+        {
+            const uint32_t seq1 = telemetrySeq.load(std::memory_order_acquire);
+            if ((seq1 & 1u) != 0u)
+                return;
+            dest = telemetry;
+        }
+
+    private:
+        void updateTelemetry(bool frozen, int mode) noexcept
+        {
+            const uint32_t seq = telemetrySeq.load(std::memory_order_relaxed);
+            telemetrySeq.store(seq + 1u, std::memory_order_release);
+
+            const int bufSize = circularBuffer.getBufferSize();
+            const int writePos = circularBuffer.getWritePos();
+            if (bufSize > 0)
+            {
+                const int stride = std::max(1, bufSize / TelemetrySnapshot::waveformPoints);
+                for (int i = 0; i < TelemetrySnapshot::waveformPoints; ++i)
+                {
+                    const double pos = static_cast<double>(writePos - i * stride);
+                    const float sL = circularBuffer.readHermiteAt(0, pos);
+                    const float sR = circularBuffer.readHermiteAt(1, pos);
+                    telemetry.waveform[static_cast<size_t>(TelemetrySnapshot::waveformPoints - 1 - i)] = 0.5f * (sL + sR);
+                }
+            }
+
+            int count = 0;
+            const double bufSizeD = static_cast<double>(std::max(1, bufSize));
+            for (const auto& v : scheduler.getVoices())
+            {
+                if (v.active && count < static_cast<int>(GrainScheduler::poolSize))
+                {
+                    double rel = std::fmod(static_cast<double>(writePos) - v.readPos, bufSizeD);
+                    if (rel < 0.0)
+                        rel += bufSizeD;
+                    telemetry.grainPositions[static_cast<size_t>(count++)] =
+                        static_cast<float>(std::clamp(1.0 - (rel / bufSizeD), 0.0, 1.0));
+                }
+            }
+            telemetry.activeGrainCount = count;
+            telemetry.frozen = frozen;
+            telemetry.mode = mode;
+
+            telemetrySeq.store(seq + 2u, std::memory_order_release);
+        }
+
+        static float sanitize(float x) noexcept
+        {
+            return std::isfinite(x) ? x : 0.0f;
+        }
+
+        CircularBuffer circularBuffer;
+        GrainScheduler scheduler;
+        juce::dsp::StateVariableTPTFilter<float> fbFilter;
+        juce::dsp::StateVariableTPTFilter<float> wetToneFilter;
+
+        double sampleRate = 44100.0;
+        float prevWetL = 0.0f;
+        float prevWetR = 0.0f;
+
+        TelemetrySnapshot telemetry;
+        std::atomic<uint32_t> telemetrySeq { 0 };
+
+        juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedMix;
+        juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedInGain;
+        juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedOutGain;
+        juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedCaptureMs;
+        juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedFeedback;
+        juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedFbTone;
+        juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedGrainSizeMs;
+        juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedDensityHz;
+        juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedPitchSt;
+        juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedTone;
+    };
+}

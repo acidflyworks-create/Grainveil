@@ -1,0 +1,35 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+_deps/
+JUCE/
+
+# IDE / Editor
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.sln
+*.vcxproj*
+compile_commands.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Compiled binaries & plugin artefacts
+*.vst3
+*.component
+*.dll
+*.dylib
+*.so
+*.a
+*.lib
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.obj
+*.o

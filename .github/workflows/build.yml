@@ -1,0 +1,159 @@
+name: Build plugins (Windows / macOS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Attach the built plugins to a GitHub Release"
+        type: boolean
+        default: true
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            label: Windows x64 (VST3)
+            artifact: Grainveil-Windows-x64
+          - runner: macos-14
+            label: macOS universal (VST3 + AU)
+            artifact: Grainveil-macOS-universal
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Toolchain
+        shell: bash
+        run: |
+          cmake --version
+          git --version
+
+      - name: Configure (Windows, MSVC x64)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Configure (macOS, universal x86_64 + arm64)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          xcodebuild -version
+          cmake -B build -G "Unix Makefiles" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+
+      - name: Build
+        shell: bash
+        run: cmake --build build --config Release --parallel 4
+
+      - name: List artefacts
+        shell: bash
+        run: find build/Grainveil_artefacts -maxdepth 4 -print | sort
+
+      - name: Package and verify (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vst3 = 'build/Grainveil_artefacts/Release/VST3/Grainveil.vst3'
+          if (-not (Test-Path -LiteralPath $vst3)) { throw "VST3 not found at $vst3" }
+          $item = Get-Item -LiteralPath $vst3
+          $bytes = [System.IO.File]::ReadAllBytes($item.FullName)
+          if ($bytes.Length -lt 64 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+            throw "VST3 does not look like a PE binary (missing MZ header)"
+          }
+          "Grainveil.vst3 : $($item.Length) bytes (PE/MZ OK)"
+          New-Item -ItemType Directory -Force -Path packages | Out-Null
+          Compress-Archive -LiteralPath $vst3 -DestinationPath 'packages/Grainveil-VST3-Windows-x64.zip' -Force
+          Get-FileHash -Algorithm SHA256 'packages/Grainveil-VST3-Windows-x64.zip' | Format-List
+
+      - name: Package and verify (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          vst3='build/Grainveil_artefacts/Release/VST3/Grainveil.vst3'
+          au='build/Grainveil_artefacts/Release/AU/Grainveil.component'
+          test -d "$vst3" || { echo "VST3 bundle not found at $vst3"; exit 1; }
+          binary="$vst3/Contents/MacOS/Grainveil"
+          test -f "$binary" || { echo "VST3 binary not found at $binary"; exit 1; }
+          file "$binary"
+          lipo -info "$binary"
+          plutil -lint "$vst3/Contents/Info.plist"
+          mkdir -p packages
+          ditto -c -k --sequesterRsrc --keepParent "$vst3" 'packages/Grainveil-VST3-macOS-universal.zip'
+          if [ -d "$au" ]; then
+            ditto -c -k --sequesterRsrc --keepParent "$au" 'packages/Grainveil-AU-macOS-universal.zip'
+          fi
+          shasum -a 256 packages/*.zip
+
+      - name: Upload build artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: packages/*.zip
+          if-no-files-found: error
+          retention-days: 90
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' && inputs.publish_release) ||
+          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artefacts
+          merge-multiple: true
+
+      - name: List release assets
+        run: |
+          ls -lh artefacts
+          sha256sum artefacts/*.zip
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            TAG="build-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
+          fi
+          cat > notes.md <<'EOF'
+          Release build of the Grainveil stereo granular processor (JUCE 8.0.4).
+
+          * `Grainveil-VST3-Windows-x64.zip` — VST3 for Windows x64 (MSVC 2022)
+          * `Grainveil-VST3-macOS-universal.zip` — VST3 for macOS, universal (Intel + Apple Silicon)
+          * `Grainveil-AU-macOS-universal.zip` — Audio Unit for macOS (bonus)
+
+          Install: unzip and copy `Grainveil.vst3` to the system VST3 folder
+          (`C:\Program Files\Common Files\VST3\` on Windows,
+          `~/Library/Audio/Plug-Ins/VST3/` on macOS). Unsigned builds: on macOS remove
+          the quarantine attribute with `xattr -dr com.apple.quarantine Grainveil.vst3`.
+          EOF
+          gh release create "$TAG" artefacts/*.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Grainveil $TAG" \
+            --notes-file notes.md \
+            --latest=false
