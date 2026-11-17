@@ -3,36 +3,67 @@
 #include "Parameters.h"
 #include <array>
 
-// Versioned built-in program data. Stage C intentionally retains the original
-// eight factory programs. Stage D will replace this table with the agreed 45.
+// Generated from presets/factory-v2.csv by tools/generate_factory_presets.py.
+// Values are in the APVTS parameters' native units; all 19 are explicit.
 namespace GrainveilFactory
 {
-constexpr int dataVersion = 1;
-struct Override { const char* id; float value; };
+constexpr int dataVersion = 2;
+inline constexpr std::array<const char*, 19> parameterIds {{
+    GrainveilParams::mix, GrainveilParams::inGain, GrainveilParams::outGain, GrainveilParams::freeze, GrainveilParams::captureTime, GrainveilParams::feedback, GrainveilParams::fbTone,
+    GrainveilParams::grainSize, GrainveilParams::density, GrainveilParams::scatter, GrainveilParams::pitch, GrainveilParams::pitchRand, GrainveilParams::reverseAmt, GrainveilParams::spread,
+    GrainveilParams::tone, GrainveilParams::mode, GrainveilParams::lfoRate, GrainveilParams::lfoDepth, GrainveilParams::tempoSync
+}};
 struct Preset
 {
     const char* category;
     const char* name;
-    const Override* values;
-    size_t count;
+    std::array<float, 19> values;
 };
-using namespace GrainveilParams;
-inline constexpr Override ambient[] = { {mode,0}, {mix,.55f}, {grainSize,220}, {density,18}, {scatter,.35f}, {feedback,.45f}, {pitch,0}, {reverseAmt,.15f}, {spread,.8f}, {tone,.7f}, {freeze,0} };
-inline constexpr Override frozen[] = { {mode,3}, {mix,.75f}, {grainSize,360}, {density,12}, {scatter,.25f}, {feedback,.3f}, {pitch,0}, {reverseAmt,.2f}, {spread,.7f}, {tone,.55f}, {freeze,1} };
-inline constexpr Override reverse[] = { {mode,2}, {mix,.65f}, {grainSize,260}, {density,14}, {scatter,.3f}, {feedback,.4f}, {pitch,0}, {reverseAmt,.9f}, {spread,.65f}, {tone,.65f}, {freeze,0} };
-inline constexpr Override glitch[] = { {mode,4}, {mix,.6f}, {grainSize,45}, {density,26}, {scatter,.75f}, {feedback,.35f}, {pitch,0}, {reverseAmt,.35f}, {spread,.85f}, {tone,.8f}, {freeze,0} };
-inline constexpr Override cloud[] = { {mode,5}, {mix,.55f}, {grainSize,190}, {density,16}, {scatter,.4f}, {feedback,.5f}, {pitch,12}, {pitchRand,.6f}, {spread,.75f}, {tone,.65f}, {freeze,0} };
-inline constexpr Override echo[] = { {mode,1}, {mix,.45f}, {captureTime,420}, {grainSize,110}, {density,8}, {scatter,.1f}, {feedback,.45f}, {pitch,0}, {spread,.4f}, {tone,.75f}, {freeze,0} };
-inline constexpr Override lofi[] = { {mode,7}, {mix,.65f}, {captureTime,1200}, {grainSize,160}, {density,11}, {scatter,.45f}, {feedback,.55f}, {tone,.4f}, {spread,.5f}, {freeze,0} };
-inline constexpr Override guitar[] = { {mode,6}, {mix,.6f}, {grainSize,320}, {density,16}, {scatter,.2f}, {feedback,.4f}, {pitch,0}, {reverseAmt,.25f}, {spread,.75f}, {tone,.72f}, {freeze,0} };
-inline constexpr std::array<Preset, 8> presets {{
-    { "Ambient Wash", "Ambient Wash", ambient, std::size(ambient) },
-    { "Frozen Drones", "Frozen Drone", frozen, std::size(frozen) },
-    { "Reverse Swells", "Reverse Swell", reverse, std::size(reverse) },
-    { "Glitch & Stutter", "Glitch Rhythm", glitch, std::size(glitch) },
-    { "Pitch Clouds", "Pitch Cloud", cloud, std::size(cloud) },
-    { "Echo Grains", "Tight Echo-Grain", echo, std::size(echo) },
-    { "Lo-Fi / Degraded", "Lo-Fi Loop", lofi, std::size(lofi) },
-    { "Guitar Textures", "Guitar Swell", guitar, std::size(guitar) }
+inline constexpr std::array<Preset, 45> presets {{
+    { "Ambient Wash", "Ambient Wash", {{ 0.55f, 0.0f, 0.0f, 0.0f, 1000.0f, 0.45f, 0.5f, 220.0f, 18.0f, 0.35f, 0.0f, 0.0f, 0.15f, 0.8f, 0.7f, 0.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Frozen Drones", "Frozen Drone", {{ 0.75f, 0.0f, 0.0f, 1.0f, 1000.0f, 0.3f, 0.5f, 360.0f, 12.0f, 0.25f, 0.0f, 0.0f, 0.2f, 0.7f, 0.55f, 3.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Reverse Swells", "Reverse Swell", {{ 0.65f, 0.0f, 0.0f, 0.0f, 1000.0f, 0.4f, 0.5f, 260.0f, 14.0f, 0.3f, 0.0f, 0.0f, 0.9f, 0.65f, 0.65f, 2.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Glitch & Stutter", "Glitch Rhythm", {{ 0.6f, 0.0f, 0.0f, 0.0f, 1000.0f, 0.35f, 0.5f, 45.0f, 26.0f, 0.75f, 0.0f, 0.0f, 0.35f, 0.85f, 0.8f, 4.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Pitch Clouds", "Pitch Cloud", {{ 0.55f, 0.0f, 0.0f, 0.0f, 1000.0f, 0.5f, 0.5f, 190.0f, 16.0f, 0.4f, 12.0f, 0.6f, 0.0f, 0.75f, 0.65f, 5.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Echo Grains", "Tight Echo-Grain", {{ 0.45f, 0.0f, 0.0f, 0.0f, 420.0f, 0.45f, 0.5f, 110.0f, 8.0f, 0.1f, 0.0f, 0.0f, 0.0f, 0.4f, 0.75f, 1.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Lo-Fi / Degraded", "Lo-Fi Loop", {{ 0.65f, 0.0f, 0.0f, 0.0f, 1200.0f, 0.55f, 0.5f, 160.0f, 11.0f, 0.45f, 0.0f, 0.0f, 0.0f, 0.5f, 0.4f, 7.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Guitar Textures", "Guitar Swell", {{ 0.6f, 0.0f, 0.0f, 0.0f, 1000.0f, 0.4f, 0.5f, 320.0f, 16.0f, 0.2f, 0.0f, 0.0f, 0.25f, 0.75f, 0.72f, 6.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Ambient Wash", "Veil of Dawn", {{ 0.48f, 0.0f, -0.5f, 0.0f, 1800.0f, 0.36f, 0.58f, 310.0f, 11.0f, 0.18f, 0.0f, 0.02f, 0.08f, 0.72f, 0.72f, 0.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Ambient Wash", "Slow Horizon", {{ 0.58f, 0.0f, -1.0f, 0.0f, 2600.0f, 0.42f, 0.38f, 420.0f, 8.0f, 0.12f, -5.0f, 0.04f, 0.12f, 0.84f, 0.48f, 6.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Ambient Wash", "Silver Canopy", {{ 0.52f, 0.0f, -1.0f, 0.0f, 1400.0f, 0.32f, 0.68f, 145.0f, 25.0f, 0.48f, 7.0f, 0.16f, 0.22f, 0.95f, 0.82f, 0.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Ambient Wash", "Night Air", {{ 0.62f, 0.0f, -1.5f, 0.0f, 2200.0f, 0.5f, 0.32f, 380.0f, 13.0f, 0.33f, -12.0f, 0.08f, 0.3f, 0.88f, 0.38f, 6.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Frozen Drones", "Amber Ice", {{ 0.68f, 0.0f, -0.5f, 1.0f, 2600.0f, 0.22f, 0.46f, 460.0f, 7.0f, 0.1f, 7.0f, 0.04f, 0.1f, 0.82f, 0.58f, 3.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Frozen Drones", "Boreal Hold", {{ 0.64f, 0.0f, -1.0f, 0.0f, 2000.0f, 0.38f, 0.52f, 290.0f, 15.0f, 0.42f, 0.0f, 0.18f, 0.35f, 0.95f, 0.64f, 3.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Frozen Drones", "Low Glacier", {{ 0.72f, 0.0f, -1.0f, 1.0f, 3600.0f, 0.28f, 0.28f, 480.0f, 5.0f, 0.08f, -12.0f, 0.03f, 0.45f, 0.62f, 0.32f, 3.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Frozen Drones", "Crystal Still", {{ 0.6f, 0.0f, -1.0f, 0.0f, 1400.0f, 0.25f, 0.7f, 235.0f, 19.0f, 0.26f, 12.0f, 0.12f, 0.18f, 0.93f, 0.82f, 3.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Reverse Swells", "Backward Bloom", {{ 0.58f, 0.0f, -0.5f, 0.0f, 900.0f, 0.3f, 0.6f, 190.0f, 19.0f, 0.25f, 0.0f, 0.04f, 0.82f, 0.8f, 0.76f, 2.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Reverse Swells", "Sundown Return", {{ 0.62f, 0.0f, -1.0f, 0.0f, 2400.0f, 0.42f, 0.35f, 380.0f, 8.0f, 0.16f, -7.0f, 0.08f, 1.0f, 0.72f, 0.45f, 2.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Reverse Swells", "Distant Inhale", {{ 0.5f, 0.0f, 0.0f, 0.0f, 650.0f, 0.22f, 0.72f, 125.0f, 10.0f, 0.12f, 12.0f, 0.1f, 0.88f, 0.55f, 0.8f, 2.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Reverse Swells", "Glass Tide", {{ 0.68f, 0.0f, -1.5f, 0.0f, 1900.0f, 0.35f, 0.58f, 340.0f, 20.0f, 0.55f, 7.0f, 0.18f, 0.95f, 0.95f, 0.66f, 2.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Glitch & Stutter", "Broken Clock", {{ 0.46f, 0.0f, -0.5f, 0.0f, 350.0f, 0.22f, 0.55f, 28.0f, 16.0f, 0.62f, 0.0f, 0.0f, 0.1f, 0.4f, 0.7f, 4.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Glitch & Stutter", "Needle Burst", {{ 0.54f, 0.0f, -1.5f, 0.0f, 180.0f, 0.18f, 0.72f, 18.0f, 35.0f, 0.9f, 12.0f, 0.25f, 0.28f, 0.78f, 0.88f, 4.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Glitch & Stutter", "Scatterstep", {{ 0.58f, 0.0f, -1.0f, 0.0f, 850.0f, 0.4f, 0.42f, 80.0f, 21.0f, 0.82f, -5.0f, 0.12f, 0.55f, 0.92f, 0.55f, 4.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Glitch & Stutter", "Static Shards", {{ 0.52f, 0.0f, -1.0f, 0.0f, 260.0f, 0.28f, 0.3f, 32.0f, 31.0f, 0.88f, -12.0f, 0.35f, 0.3f, 0.82f, 0.36f, 7.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Pitch Clouds", "Velvet Fifth", {{ 0.48f, 0.0f, -0.5f, 0.0f, 1600.0f, 0.32f, 0.46f, 250.0f, 12.0f, 0.18f, 7.0f, 0.05f, 0.08f, 0.72f, 0.56f, 5.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Pitch Clouds", "Shimmer Arc", {{ 0.56f, 0.0f, -1.5f, 0.0f, 2100.0f, 0.4f, 0.62f, 330.0f, 18.0f, 0.3f, 12.0f, 0.22f, 0.18f, 0.93f, 0.82f, 5.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Pitch Clouds", "Octave Drift", {{ 0.6f, 0.0f, -1.0f, 0.0f, 2800.0f, 0.36f, 0.32f, 410.0f, 9.0f, 0.4f, -12.0f, 0.15f, 0.25f, 0.86f, 0.4f, 5.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Pitch Clouds", "Prismatic Third", {{ 0.5f, 0.0f, -1.0f, 0.0f, 900.0f, 0.28f, 0.56f, 115.0f, 23.0f, 0.58f, 4.0f, 0.4f, 0.12f, 0.98f, 0.74f, 5.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Echo Grains", "Copper Taps", {{ 0.38f, 0.0f, 0.0f, 0.0f, 230.0f, 0.34f, 0.64f, 70.0f, 6.0f, 0.05f, 0.0f, 0.0f, 0.0f, 0.3f, 0.72f, 1.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Echo Grains", "Dust Delay", {{ 0.42f, 0.0f, -0.5f, 0.0f, 780.0f, 0.5f, 0.3f, 130.0f, 4.0f, 0.18f, -5.0f, 0.04f, 0.08f, 0.55f, 0.43f, 1.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Echo Grains", "Wandering Echo", {{ 0.48f, 0.0f, -1.0f, 0.0f, 1450.0f, 0.46f, 0.52f, 190.0f, 9.0f, 0.42f, 7.0f, 0.12f, 0.25f, 0.95f, 0.66f, 1.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Echo Grains", "Dusk Repeater", {{ 0.52f, 0.0f, -1.0f, 0.0f, 2200.0f, 0.58f, 0.25f, 240.0f, 5.0f, 0.08f, -12.0f, 0.02f, 0.1f, 0.65f, 0.36f, 1.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Lo-Fi / Degraded", "Oxide Trail", {{ 0.5f, 0.0f, -0.5f, 0.0f, 1700.0f, 0.38f, 0.25f, 220.0f, 8.0f, 0.32f, 0.0f, 0.06f, 0.1f, 0.48f, 0.35f, 7.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Lo-Fi / Degraded", "Tape Motes", {{ 0.58f, 0.0f, -1.0f, 0.0f, 720.0f, 0.32f, 0.36f, 85.0f, 17.0f, 0.58f, -5.0f, 0.16f, 0.22f, 0.72f, 0.48f, 7.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Lo-Fi / Degraded", "Dim Radio", {{ 0.46f, 0.0f, -0.5f, 0.0f, 350.0f, 0.18f, 0.2f, 40.0f, 24.0f, 0.7f, 7.0f, 0.08f, 0.08f, 0.35f, 0.25f, 7.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Lo-Fi / Degraded", "Broken Velvet", {{ 0.68f, 0.0f, -1.5f, 0.0f, 2400.0f, 0.48f, 0.3f, 310.0f, 7.0f, 0.42f, -12.0f, 0.25f, 0.45f, 0.85f, 0.3f, 7.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Guitar Textures", "Silk Harmonics", {{ 0.38f, 0.0f, -0.5f, 0.0f, 800.0f, 0.28f, 0.62f, 140.0f, 17.0f, 0.18f, 12.0f, 0.04f, 0.06f, 0.7f, 0.77f, 0.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Guitar Textures", "Bowed Strings", {{ 0.52f, 0.0f, -1.0f, 0.0f, 2100.0f, 0.38f, 0.4f, 390.0f, 10.0f, 0.15f, 0.0f, 0.05f, 0.2f, 0.8f, 0.5f, 6.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Guitar Textures", "Chime Bloom", {{ 0.42f, 0.0f, -0.5f, 0.0f, 1200.0f, 0.32f, 0.62f, 175.0f, 14.0f, 0.26f, 7.0f, 0.1f, 0.12f, 0.88f, 0.82f, 5.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Guitar Textures", "Deep Resonance", {{ 0.4f, 0.0f, -1.0f, 0.0f, 1050.0f, 0.52f, 0.3f, 210.0f, 6.0f, 0.12f, -12.0f, 0.03f, 0.05f, 0.58f, 0.38f, 1.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Sound Design / Experimental", "Fault Lines", {{ 0.56f, 0.0f, -1.5f, 0.0f, 540.0f, 0.46f, 0.4f, 65.0f, 29.0f, 0.95f, -7.0f, 0.34f, 0.62f, 0.96f, 0.6f, 4.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Sound Design / Experimental", "Metal Vortex", {{ 0.6f, 0.0f, -2.0f, 0.0f, 450.0f, 0.35f, 0.74f, 55.0f, 32.0f, 0.72f, 19.0f, 0.55f, 0.4f, 0.95f, 0.84f, 5.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Sound Design / Experimental", "Ghost Circuit", {{ 0.62f, 0.0f, -1.5f, 0.0f, 3100.0f, 0.56f, 0.2f, 370.0f, 6.0f, 0.65f, -19.0f, 0.28f, 0.7f, 0.7f, 0.24f, 7.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Sound Design / Experimental", "Orbit Debris", {{ 0.54f, 0.0f, -1.5f, 0.0f, 1100.0f, 0.38f, 0.48f, 95.0f, 27.0f, 0.9f, -5.0f, 0.65f, 0.5f, 1.0f, 0.68f, 0.0f, 0.5f, 0.0f, 0.0f }} },
+    { "Sound Design / Experimental", "Feral Memory", {{ 0.7f, 0.0f, -2.0f, 1.0f, 3500.0f, 0.5f, 0.34f, 480.0f, 8.0f, 0.8f, 12.0f, 0.4f, 1.0f, 1.0f, 0.52f, 2.0f, 0.5f, 0.0f, 0.0f }} },
 }};
 }

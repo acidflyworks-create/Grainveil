@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include "FactoryPresets.h"
 #include "ui/PresetBar.h"
 #include "dsp/TelemetryExchange.h"
 #include <atomic>
@@ -30,7 +31,72 @@ int main()
         check(p.getCurrentProgram() == PresetManager::initProgram() && p.getProgramName(p.getCurrentProgram()) == "Init", "initial program");
         check(p.getProgramName(0) == "Ambient Wash", "original factory program indices preserved");
         check(! manager.isModified(), "initial state should be unmodified");
-        check(p.getNumPrograms() == 9 + PresetManager::maxUserPresets, "stable host program count");
+        check(p.getNumPrograms() == 46 + PresetManager::maxUserPresets, "stable host program count");
+        check(GrainveilFactory::dataVersion == 2 && PresetManager::initProgram() == 45, "factory bank version and count");
+        // Original v1 programs, including values that were formerly implicit defaults.
+        const std::array<const char*, 8> originalNames {{ "Ambient Wash", "Frozen Drone", "Reverse Swell", "Glitch Rhythm", "Pitch Cloud", "Tight Echo-Grain", "Lo-Fi Loop", "Guitar Swell" }};
+        const std::array<std::array<float, 19>, 8> originalValues {{
+            {{.55f,0,0,0,1000,.45f,.5f,220,18,.35f,0,0,.15f,.8f,.7f,0,.5f,0,0}},
+            {{.75f,0,0,1,1000,.3f,.5f,360,12,.25f,0,0,.2f,.7f,.55f,3,.5f,0,0}},
+            {{.65f,0,0,0,1000,.4f,.5f,260,14,.3f,0,0,.9f,.65f,.65f,2,.5f,0,0}},
+            {{.6f,0,0,0,1000,.35f,.5f,45,26,.75f,0,0,.35f,.85f,.8f,4,.5f,0,0}},
+            {{.55f,0,0,0,1000,.5f,.5f,190,16,.4f,12,.6f,0,.75f,.65f,5,.5f,0,0}},
+            {{.45f,0,0,0,420,.45f,.5f,110,8,.1f,0,0,0,.4f,.75f,1,.5f,0,0}},
+            {{.65f,0,0,0,1200,.55f,.5f,160,11,.45f,0,0,0,.5f,.4f,7,.5f,0,0}},
+            {{.6f,0,0,0,1000,.4f,.5f,320,16,.2f,0,0,.25f,.75f,.72f,6,.5f,0,0}}
+        }};
+        for (size_t i = 0; i < originalNames.size(); ++i)
+        {
+            check(p.getProgramName(static_cast<int>(i)) == originalNames[i], "v1 factory name and index preserved");
+            for (size_t j = 0; j < originalValues[i].size(); ++j)
+                check(near(GrainveilFactory::presets[i].values[j], originalValues[i][j]), "v1 factory values preserved");
+        }
+        juce::StringArray categories { "Ambient Wash", "Frozen Drones", "Reverse Swells", "Glitch & Stutter", "Pitch Clouds", "Echo Grains", "Lo-Fi / Degraded", "Guitar Textures", "Sound Design / Experimental" };
+        for (const auto& category : categories)
+        {
+            int count = 0;
+            for (int i = 0; i < PresetManager::initProgram(); ++i)
+                if (manager.getProgramCategory(i) == category) ++count;
+            check(count == 5, "factory category contains five programs");
+        }
+        for (int i = 0; i < PresetManager::initProgram(); ++i)
+        {
+            const auto& factory = GrainveilFactory::presets[static_cast<size_t>(i)];
+            check(categories.contains(factory.category), "factory category recognised");
+            for (size_t j = 0; j < factory.values.size(); ++j)
+            {
+                auto* param = p.getAPVTS().getParameter(GrainveilFactory::parameterIds[j]);
+                check(param != nullptr, "factory parameter exists");
+                if (param == nullptr) continue;
+                const auto actual = factory.values[j];
+                const auto legal = param->convertFrom0to1(param->convertTo0to1(actual));
+                check(std::isfinite(actual) && std::abs(actual - legal) < .002f, "factory value is legal and quantised");
+                // Deliberately disturb every parameter before each load, to catch omitted values.
+                param->setValueNotifyingHost(param->convertTo0to1(actual) < .5f ? 1.0f : 0.0f);
+            }
+            p.setCurrentProgram(i);
+            manager.servicePendingProgram();
+            check(p.getCurrentProgram() == i && ! manager.isModified(), "factory selected and unmodified");
+            for (size_t j = 0; j < factory.values.size(); ++j)
+            {
+                auto* param = p.getAPVTS().getParameter(GrainveilFactory::parameterIds[j]);
+                if (param != nullptr)
+                    check(std::abs(param->convertFrom0to1(param->getValue()) - factory.values[j]) < .002f, "factory loads every parameter");
+            }
+        }
+        p.setCurrentProgram(7);
+        manager.servicePendingProgram();
+        juce::XmlElement legacyState("LegacySession");
+        manager.writeSessionMetadata(legacyState);
+        auto* legacyMeta = legacyState.getChildByName("GrainveilProgram");
+        check(legacyMeta != nullptr && legacyMeta->getIntAttribute("version") == 1, "session metadata remains v1 compatible");
+        p.setCurrentProgram(PresetManager::initProgram());
+        manager.servicePendingProgram();
+        manager.restoreSessionMetadata(legacyMeta);
+        check(p.getCurrentProgram() == 7 && p.getProgramName(7) == "Guitar Swell", "v1 factory metadata resolved by name");
+        check(manager.isModified(), "legacy baseline remains distinct from current parameters");
+        p.setCurrentProgram(PresetManager::initProgram());
+        manager.servicePendingProgram();
 
         const float before = mix->getValue();
         std::thread host([&] { p.setCurrentProgram(0); });
@@ -70,7 +136,7 @@ int main()
         check(manager.saveUserPreset(longName, false, error), "save user preset");
         check(manager.isUserProgram(p.getCurrentProgram()), "saved preset selected");
         const int userProgram = p.getCurrentProgram();
-        check(p.getNumPrograms() == 9 + PresetManager::maxUserPresets, "program count unchanged by save");
+        check(p.getNumPrograms() == 46 + PresetManager::maxUserPresets, "program count unchanged by save");
         check(! manager.isModified(), "saved user preset is unmodified");
         check(! manager.saveUserPreset(longName.toUpperCase(), false, error), "case-insensitive duplicate rejected");
         mix->setValueNotifyingHost(mix->convertTo0to1(.18f));

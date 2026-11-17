@@ -8,13 +8,8 @@
 
 namespace
 {
-constexpr std::array<const char*, PresetManager::parameterCount> ids {{
-    GrainveilParams::mix, GrainveilParams::inGain, GrainveilParams::outGain, GrainveilParams::freeze,
-    GrainveilParams::captureTime, GrainveilParams::feedback, GrainveilParams::fbTone, GrainveilParams::grainSize,
-    GrainveilParams::density, GrainveilParams::scatter, GrainveilParams::pitch, GrainveilParams::pitchRand,
-    GrainveilParams::reverseAmt, GrainveilParams::spread, GrainveilParams::tone, GrainveilParams::mode,
-    GrainveilParams::lfoRate, GrainveilParams::lfoDepth, GrainveilParams::tempoSync
-}};
+constexpr auto ids = GrainveilFactory::parameterIds;
+static_assert(ids.size() == PresetManager::parameterCount, "Factory bank must cover all parameters");
 constexpr int presetFileVersion = 1;
 constexpr int sessionVersion = 1;
 
@@ -197,12 +192,11 @@ PresetManager::Values PresetManager::defaultValues() const noexcept
 
 PresetManager::Values PresetManager::factoryValues(int index) const
 {
-    auto result = defaultValues();
+    Values result {};
     const auto& preset = GrainveilFactory::presets[static_cast<size_t>(index)];
-    for (size_t i = 0; i < preset.count; ++i)
-        for (size_t p = 0; p < ids.size(); ++p)
-            if (juce::StringRef(preset.values[i].id) == juce::StringRef(ids[p]) && parameters[p] != nullptr)
-                result[p] = parameters[p]->convertTo0to1(preset.values[i].value);
+    for (size_t i = 0; i < result.size(); ++i)
+        if (parameters[i] != nullptr)
+            result[i] = parameters[i]->convertTo0to1(preset.values[i]);
     return result;
 }
 

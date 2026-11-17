@@ -67,21 +67,26 @@ Init, marked modified if their parameters differ from the defaults. If a user pr
 are restored but the selection falls back to Init.
 
 For stable VST3 program-change automation, each instance exposes **64 fixed user slots**
-(in addition to Init and the current eight factory programs); unused slots may be visible
+(in addition to Init and the 45 factory programs); unused slots may be visible
 in the host's program list but are omitted from the plugin's menu and arrow navigation.
 Slot numbers are persisted in the files. Multiple instances coordinate writes; files
 created by another instance become visible when saving or on reopening the plugin. Avoid
 manually duplicating a `.gvpreset` file, as two files with the same slot conflict. A host
 may cache program names and require reopening the instance to refresh its list. The original
-eight factory program indices remain 0–7, but VST3 represents program automation using
-a normalized value and the enlarged program list changes its step count. Existing DAW
-program-change automation from the earlier eight-program build may therefore map to a
-different program; verify it before replacing that build. Saved parameter state still loads.
+eight factory program indices and parameter values remain 0–7. Init moved from index 8 to
+45 and the user slots moved from 9–72 to 46–109. VST3 represents program automation using
+a normalized value, and increasing the program count also changes its step count. Existing
+host program-change automation or host-managed numeric program references may therefore
+select a different program, even for the original eight; verify and reassign them before
+upgrading. Session metadata identifies presets by name and the saved parameter state still
+loads; actual DAW compatibility must be checked in each host.
 
-The stage C factory table retains the existing eight programs; the requested 45 original
-presets are planned for stage D. Existing DSP smoothing covers many continuous parameters,
-but not every discrete transition; click-free switching across all material has not been
-verified and cannot be guaranteed without further audio-path work and listening tests.
+The [factory preset table](docs/FACTORY_PRESETS.md) lists all 45 programs, their modes and
+key values. Their complete 19-parameter data is maintained in `presets/factory-v2.csv`;
+run `python tools/generate_factory_presets.py` after editing it and `--check` to validate.
+Factory output levels have not been loudness-matched, and subjective results depend on
+the input material. Existing DSP smoothing covers many continuous parameters, but not every
+discrete transition; click-free switching has not been verified or guaranteed.
 
 The UI embeds Lato Regular and Semibold under the SIL OFL 1.1 (see
 `THIRD_PARTY_LICENSES.md`). `UiTypography` measures single-line text, reduces it to a
@@ -158,4 +163,4 @@ cp -R build/Grainveil_artefacts/Release/AU/Grainveil.component ~/Library/Audio/P
 2. **Sample Rate & Block Size Switching**: Switch Reaper between `44.1 kHz`, `48 kHz`, `96 kHz`, and `192 kHz` (and buffers `32` to `2048`); verify clean audio and accurate pitch/grain timing.
 3. **Freeze Spam & Silence**: Rapidly toggle `FREEZE` on/off while feeding audio and during silence; verify no clicks, no buffer corruption, and clean tail decay.
 4. **High Feedback & Huge Hits**: Set `Feedback` to `0.95` and send a loud transient; verify the cloud blooms and stabilizes smoothly without clipping or NaN/Inf lockup.
-5. **Preset & State Recall**: Cycle all 8 factory presets, save the `.rpp` project, close, and reopen; verify exact parameter and UI state restoration.
+5. **Preset & State Recall**: Cycle all 45 factory presets, save the `.rpp` project, close, and reopen; verify exact parameter and UI state restoration.
