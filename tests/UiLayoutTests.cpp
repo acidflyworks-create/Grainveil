@@ -55,9 +55,13 @@ int main()
 
     // Check the drawing helper really clips ink, not just its measured advance.
     juce::Image image(juce::Image::ARGB, 120, 50, true);
-    juce::Graphics graphics(image);
-    graphics.setColour(juce::Colours::white);
-    GrainveilUI::drawFittedText(graphics, samples[2], { 20, 10, 45, 22 }, 15, 9, juce::Justification::centred);
+    {
+        // Release the graphics context before reading pixels: some Windows
+        // renderers flush deferred drawing when the context is destroyed.
+        juce::Graphics graphics(image);
+        graphics.setColour(juce::Colours::white);
+        GrainveilUI::drawFittedText(graphics, samples[2], { 20, 10, 45, 22 }, 15, 9, juce::Justification::centred);
+    }
     bool hasInk = false, escaped = false;
     for (int y = 0; y < image.getHeight(); ++y)
         for (int x = 0; x < image.getWidth(); ++x)
