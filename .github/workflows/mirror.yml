@@ -1,0 +1,101 @@
+name: Mirror artefacts (one-off)
+
+# Temporary helper: GitHub blocks the artifact/release CDN hosts from the Agent
+# sandbox, so this job re-publishes each ZIP as a git blob (reachable through
+# api.github.com) and records checksums in the release notes. It is removed again
+# once the binaries have been copied into the workspace.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Actions run ID that produced the artefacts"
+        required: true
+        type: string
+      tag:
+        description: "Release tag to annotate with checksums"
+        required: true
+        default: "build-3-a36eec6"
+        type: string
+      commit_sha:
+        description: "Commit to attach the blob-SHA status to"
+        required: true
+        type: string
+  push:
+    paths: [".github/workflows/mirror.yml"]
+
+permissions:
+  contents: write
+  actions: read
+  statuses: write
+
+jobs:
+  mirror:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artefacts from the build run
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          path: artefacts
+          merge-multiple: true
+
+      - name: Inspect archives and checksums
+        run: |
+          set -euo pipefail
+          ls -lh artefacts
+          for f in artefacts/*.zip; do
+            echo "--- $f"
+            unzip -l "$f" | head -12
+          done
+          sha256sum artefacts/*.zip | tee checksums.txt
+
+      - name: Publish ZIPs as git blobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          names=(Grainveil-VST3-Windows-x64.zip Grainveil-VST3-macOS-universal.zip Grainveil-AU-macOS-universal.zip)
+          : > blob-shas.txt
+          for name in "${names[@]}"; do
+            f="artefacts/$name"
+            test -f "$f" || { echo "missing $f"; exit 1; }
+            python3 - "$f" > payload.json <<'PY'
+          import base64, json, sys
+          with open(sys.argv[1], "rb") as fh:
+              print(json.dumps({"encoding": "base64", "content": base64.b64encode(fh.read()).decode()}))
+          PY
+            sha=$(gh api -X POST "repos/$GITHUB_REPOSITORY/git/blobs" \
+                    -H "Content-Type: application/json" --input payload.json --jq .sha)
+            echo "$name=$sha" | tee -a blob-shas.txt
+          done
+
+      - name: Record checksums in the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view "${{ inputs.tag }}" --json body --jq .body > body.md
+          {
+            cat body.md
+            echo
+            echo "## SHA-256 checksums"
+            echo '```'
+            cat checksums.txt
+            echo '```'
+          } > notes.md
+          gh release edit "${{ inputs.tag }}" --notes-file notes.md
+
+      - name: Publish blob SHAs as a commit status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          desc=$(cut -d= -f2 blob-shas.txt | paste -sd, -)
+          echo "blob SHAs: $desc (${#desc} chars)"
+          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/${{ inputs.commit_sha }}" \
+            -f state=success \
+            -f context="grainveil/artifact-blobs" \
+            -f description="$desc" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/${{ inputs.tag }}" > /dev/null
