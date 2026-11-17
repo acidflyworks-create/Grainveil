@@ -20,6 +20,7 @@ compile_commands.json
 Thumbs.db
 
 # Compiled binaries & plugin artefacts
+/packages/
 *.vst3
 *.component
 *.dll
