@@ -154,6 +154,8 @@ int main(int argc, char** argv)
     }
     for (auto* child : surface->getChildren())
         if (auto* slider = dynamic_cast<juce::Slider*>(child)) slider->setValue(slider->getMaximum(), juce::sendNotificationSync);
+    if (auto* freeze = processor.getAPVTS().getParameter(GrainveilParams::freeze))
+        freeze->setValueNotifyingHost(1.0f);
     presetBar->refresh();
     oled->setPresetName(longName, true);
     oled->setControlState("ReverseSwarm", true);

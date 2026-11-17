@@ -22,7 +22,9 @@ produces a folder `Contents/x86_64-win/Grainveil.vst3`, not a single DLL) into
 `C:\Program Files\Common Files\VST3\` (Windows) or
 `~/Library/Audio/Plug-Ins/VST3/` (macOS). The binaries are not notarized: on macOS run
 `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/Grainveil.vst3` before
-the first scan, and allow the plugin in System Settings if Gatekeeper asks.
+the first scan, and allow the plugin in System Settings if Gatekeeper asks. The ZIPs
+also contain the project and embedded-font license notices; retain those notices when
+redistributing the plugin.
 
 ### Готовые сборки
 
@@ -30,7 +32,7 @@ the first scan, and allow the plugin in System Settings if Gatekeeper asks.
 После запуска workflow архивы с `.vst3` появляются на вкладке **Releases** и в артефактах
 запуска. Локально из Linux собрать эти два формата нельзя — нужен MSVC и Xcode/macOS SDK.
 
-## Editor and presets (stage C)
+## Editor and presets
 
 The current editor uses a 1000 × 620 logical design grid. User resizing is constrained
 from 750 × 465 (75%) to 2000 × 1240 (200%) at the same aspect ratio. All existing
@@ -102,12 +104,14 @@ For the automated design-grid and text-fitting harness, configure with
 `-DGRAINVEIL_BUILD_UI_TESTS=ON`, build, and run `ctest --test-dir build -C Release
 --output-on-failure`. It checks non-overlapping grid rectangles at min/default/max
 editor scales and 100/150/200% simulated DPI, fitting/ellipsis and text ink clipping.
-The tests also cover host program requests, wrap-around, user save/load, modified markers,
-session recall and concurrent telemetry. They render the actual editor off-screen at
-min/default/max sizes and simulated 100/150/200% DPI into `build/ui-previews/`, plus a
-clearly named synthetic monitor fixture. CI uploads these images as `Grainveil-UI-previews-Windows` and
-`Grainveil-UI-previews-macOS`. They are test renders, not screenshots from a DAW or
-proof of behavior at real OS display scale settings.
+The tests also cover actual component sibling bounds, long names and extreme values,
+host program requests, wrap-around, user save/load, modified markers, session recall
+and concurrent telemetry. They render normal and stress states of the editor off-screen
+at min/default/max sizes and simulated 100/150/200% DPI into `build/ui-previews/`, plus
+a synthetic monitor fixture. CI uploads them as `Grainveil-UI-previews-Windows` and
+`Grainveil-UI-previews-macOS`. They are not DAW screenshots or proof of behavior at
+real OS display scales. See the [stage E QA and asset report](docs/QA_AND_ASSETS.md)
+for the size budgets, automated coverage, limitations and manual acceptance checklist.
 
 ## Build Instructions
 
