@@ -1,0 +1,22 @@
+name: Temporary UI test diagnosis
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/diagnose-ui.yml']
+permissions:
+  actions: read
+  contents: write
+  statuses: write
+jobs:
+  diagnose:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run view 44087860580 --repo "$GITHUB_REPOSITORY" --log-failed > failed.txt
+          python3 -c 'import json,base64; print(json.dumps({"encoding":"base64","content":base64.b64encode(open("failed.txt","rb").read()).decode()}))' > payload.json
+          sha=$(gh api -X POST "repos/$GITHUB_REPOSITORY/git/blobs" --input payload.json --jq .sha)
+          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f state=success -f context=grainveil/ui-test-log -f description="$sha"
