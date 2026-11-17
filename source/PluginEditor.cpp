@@ -19,6 +19,9 @@ GrainveilAudioProcessorEditor::GrainveilAudioProcessorEditor(GrainveilAudioProce
     modeCombo.setTooltip("Choose the granular processing mode");
     modeCombo.setRepaintsOnMouseActivity(true);
     designSurface.addAndMakeVisible(modeCombo);
+    // ComboBox creates its label before it has a parent; rebuild it using our
+    // inherited look-and-feel rather than the host's default theme.
+    modeCombo.sendLookAndFeelChange();
     modeLabel.setText("MODE", juce::dontSendNotification);
     modeLabel.setJustificationType(juce::Justification::centred);
     modeLabel.setColour(juce::Label::textColourId, juce::Colour(0xff9aa092));
@@ -78,6 +81,8 @@ void GrainveilAudioProcessorEditor::setupKnob(GrainveilKnob& slider, juce::Label
     slider.configure(text, unit, tooltip);
     slider.addListener(this);
     designSurface.addAndMakeVisible(slider);
+    // Recreate the value label after the component inherits our look-and-feel.
+    slider.sendLookAndFeelChange();
 
     label.setText(text, juce::dontSendNotification);
     label.setJustificationType(juce::Justification::centred);

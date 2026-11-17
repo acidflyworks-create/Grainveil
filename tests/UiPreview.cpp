@@ -34,6 +34,30 @@ int main(int argc, char** argv)
     GrainveilAudioProcessorEditor editor(processor);
     editor.setVisible(true);
 
+    // The controls create internal labels before parenting. Ensure that the
+    // editor rebuilt those labels with its embedded font and own theme.
+    int sliderCount = 0, correctlyStyled = 0;
+    std::function<void(juce::Component&)> inspect = [&](juce::Component& component)
+    {
+        if (auto* slider = dynamic_cast<juce::Slider*>(&component))
+        {
+            ++sliderCount;
+            for (auto* child : slider->getChildren())
+                if (auto* label = dynamic_cast<juce::Label*>(child))
+                    if (label->getFont().getTypefacePtr()->getName().containsIgnoreCase("Lato")
+                        && label->findColour(juce::Label::outlineColourId).isTransparent())
+                        ++correctlyStyled;
+        }
+        for (auto* child : component.getChildren()) inspect(*child);
+    };
+    inspect(editor);
+    if (sliderCount != 10 || correctlyStyled != sliderCount)
+    {
+        std::cerr << "Slider value fields did not inherit the embedded-font theme: "
+                  << correctlyStyled << "/" << sliderCount << '\\n';
+        return 1;
+    }
+
     struct Size { int w, h; const char* name; };
     const Size sizes[] = { {750, 465, "min"}, {1000, 620, "default"}, {2000, 1240, "max"} };
     struct Scale { float value; const char* name; };

@@ -21,6 +21,7 @@ Thumbs.db
 
 # Compiled binaries & plugin artefacts
 /packages/
+/previews/
 *.vst3
 *.component
 *.dll
