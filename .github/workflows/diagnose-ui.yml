@@ -1,3 +1,4 @@
+# One-off retrieval of the failed test log via a reachable git blob.
 name: Temporary UI test diagnosis
 on:
   workflow_dispatch:
