@@ -45,6 +45,12 @@ jobs:
       - name: Validate factory preset source and generated files
         run: python tools/generate_factory_presets.py --check
 
+      - name: Validate UI font coverage, asset size and hashes
+        shell: bash
+        run: |
+          python tools/check_font_glyphs.py
+          python tools/size_report.py --output build-reports/assets.json
+
       - name: Toolchain
         shell: bash
         run: |
@@ -87,6 +93,24 @@ jobs:
         shell: bash
         run: find build/Grainveil_artefacts -maxdepth 4 -print | sort
 
+      - name: Check installed bundle size (Windows VST3)
+        if: runner.os == 'Windows'
+        run: python tools/size_report.py --bundle build/Grainveil_artefacts/Release/VST3/Grainveil.vst3 --output build-reports/Windows-VST3.json
+
+      - name: Check installed bundle sizes (macOS VST3 and AU)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          python tools/size_report.py --bundle build/Grainveil_artefacts/Release/VST3/Grainveil.vst3 --output build-reports/macOS-VST3.json
+          python tools/size_report.py --bundle build/Grainveil_artefacts/Release/AU/Grainveil.component --output build-reports/macOS-AU.json
+
+      - name: Upload asset and bundle size reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: Grainveil-size-reports-${{ runner.os }}
+          path: build-reports/*.json
+          if-no-files-found: error
+
       - name: Package and verify (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -110,8 +134,10 @@ jobs:
             throw "VST3 does not look like a PE binary (missing MZ header): $binaryPath"
           }
           "PE binary: $binaryPath ($($bytes.Length) bytes, MZ header OK)"
-          New-Item -ItemType Directory -Force -Path packages | Out-Null
-          Compress-Archive -LiteralPath $item.FullName -DestinationPath 'packages/Grainveil-VST3-Windows-x64.zip' -Force
+          New-Item -ItemType Directory -Force -Path packages, package-staging/windows | Out-Null
+          Copy-Item -LiteralPath $item.FullName -Destination 'package-staging/windows' -Recurse
+          Copy-Item -LiteralPath 'LICENSE', 'THIRD_PARTY_LICENSES.md', 'assets/fonts/OFL.txt' -Destination 'package-staging/windows'
+          Compress-Archive -Path 'package-staging/windows/*' -DestinationPath 'packages/Grainveil-VST3-Windows-x64.zip' -Force
           Get-FileHash -Algorithm SHA256 'packages/Grainveil-VST3-Windows-x64.zip' | Format-List
 
       - name: Package and verify (macOS)
@@ -127,12 +153,22 @@ jobs:
           file "$binary"
           lipo -info "$binary"
           plutil -lint "$vst3/Contents/Info.plist"
-          mkdir -p packages
-          ditto -c -k --sequesterRsrc --keepParent "$vst3" 'packages/Grainveil-VST3-macOS-universal.zip'
-          if [ -d "$au" ]; then
-            ditto -c -k --sequesterRsrc --keepParent "$au" 'packages/Grainveil-AU-macOS-universal.zip'
-          fi
+          test -d "$au" || { echo "AU bundle not found at $au"; exit 1; }
+          mkdir -p packages package-staging/vst3 package-staging/au
+          ditto "$vst3" package-staging/vst3/Grainveil.vst3
+          ditto "$au" package-staging/au/Grainveil.component
+          for format in vst3 au; do
+            cp LICENSE THIRD_PARTY_LICENSES.md assets/fonts/OFL.txt "package-staging/$format/"
+          done
+          # Keep the bundle and license notices at the archive root. Do not modify
+          # signed macOS bundles after linking.
+          (cd package-staging/vst3 && ditto -c -k --sequesterRsrc . ../../packages/Grainveil-VST3-macOS-universal.zip)
+          (cd package-staging/au && ditto -c -k --sequesterRsrc . ../../packages/Grainveil-AU-macOS-universal.zip)
           shasum -a 256 packages/*.zip
+
+      - name: Verify distribution license notices
+        shell: bash
+        run: python tools/check_packages.py packages/*.zip
 
       - name: Upload build artefacts
         uses: actions/upload-artifact@v4

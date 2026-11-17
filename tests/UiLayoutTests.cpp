@@ -49,6 +49,16 @@ int main()
                   "fitted text exceeds its width");
             check(fitted.font.getHeight() <= 22.0f, "fitted text exceeds its height");
         }
+    const juce::String extremes[] = { "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW", "ReverseSwarm",
+                                      "4000 ms", "100.0 %", "+24.0 st", "-24.0 st", "40.0 Hz" };
+    for (bool semibold : { false, true })
+        for (const auto& sample : extremes)
+            for (float width : { 12.0f, 45.0f, 80.0f, 170.0f })
+            {
+                const auto fitted = GrainveilUI::fitText(sample, { 0, 0, width, 22 }, 15, 9, semibold);
+                check(juce::GlyphArrangement::getStringWidth(fitted.font, fitted.text) <= width + 0.01f,
+                      "extreme text exceeds its zone");
+            }
     const auto truncated = GrainveilUI::fitText(samples[2], { 0, 0, 45, 22 }, 15, 9);
     check(truncated.text.endsWith(juce::String::charToString(0x2026)), "long text should end in ellipsis");
     check(GrainveilUI::fitText("A", { 0, 0, 10, 4 }, 15, 9).text.isEmpty(), "undersized zone should draw nothing");
