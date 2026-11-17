@@ -1,0 +1,68 @@
+name: Temporary QA report transfer
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Build run to inspect
+        type: string
+        required: true
+permissions:
+  contents: write
+  actions: read
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: arena/12085b27-grainveil
+      - uses: actions/download-artifact@v4
+        with:
+          name: Grainveil-UI-previews-Windows
+          path: transfer-input/windows-previews
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: Grainveil-UI-previews-macOS
+          path: transfer-input/macos-previews
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: Grainveil-size-reports-Windows
+          path: transfer-input/windows-reports
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: Grainveil-size-reports-macOS
+          path: transfer-input/macos-reports
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Transfer selected preview blobs and small reports
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_RUN: ${{ inputs.run_id }}
+        run: |
+          python3 - <<'PY'
+          import base64,json,os,pathlib,subprocess
+          root=pathlib.Path('transfer-input')
+          manifest={'source_run':os.environ['SOURCE_RUN'],'reports':{},'images':{}}
+          for p in sorted(root.glob('*-reports/*.json')):
+              manifest['reports'][str(p.relative_to(root))]=json.loads(p.read_text())
+          for platform in ['windows','macos']:
+              for name in ['min-dpi100.png','default-dpi150.png','max-dpi200.png','stress-min-dpi100.png','stress-default-dpi150.png','stress-max-dpi200.png']:
+                  p=root/f'{platform}-previews'/name
+                  payload=json.dumps({'content':base64.b64encode(p.read_bytes()).decode(),'encoding':'base64'})
+                  sha=subprocess.run(['gh','api','--method','POST',f"repos/{os.environ['GH_REPO']}/git/blobs",'--input','-','--jq','.sha'],input=payload,text=True,check=True,capture_output=True).stdout.strip()
+                  manifest['images'][platform+'/'+name]=sha
+          dest=pathlib.Path('transfer/qa-manifest.json');dest.parent.mkdir(exist_ok=True)
+          dest.write_text(json.dumps(manifest,indent=2)+'\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add transfer/qa-manifest.json
+          git commit -m 'Temporary QA report transfer [skip ci]'
+          git push origin HEAD:arena/12085b27-grainveil
