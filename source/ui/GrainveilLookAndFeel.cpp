@@ -17,6 +17,12 @@ GrainveilLookAndFeel::GrainveilLookAndFeel()
     setColour(juce::PopupMenu::backgroundColourId, juce::Colour(0xff1b201e));
     setColour(juce::PopupMenu::textColourId, Palette::text);
     setColour(juce::PopupMenu::highlightedBackgroundColourId, juce::Colour(0xff383f36));
+    setColour(juce::AlertWindow::backgroundColourId, juce::Colour(0xff202522));
+    setColour(juce::AlertWindow::textColourId, Palette::text);
+    setColour(juce::AlertWindow::outlineColourId, Palette::muted);
+    setColour(juce::TextEditor::textColourId, Palette::text);
+    setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff161b18));
+    setColour(juce::TextEditor::highlightColourId, Palette::warm.withAlpha(0.35f));
 }
 
 juce::Font GrainveilLookAndFeel::getComboBoxFont(juce::ComboBox& box)
@@ -25,6 +31,30 @@ juce::Font GrainveilLookAndFeel::getComboBoxFont(juce::ComboBox& box)
 }
 juce::Font GrainveilLookAndFeel::getPopupMenuFont() { return font(13.0f); }
 juce::Font GrainveilLookAndFeel::getSliderPopupFont(juce::Slider&) { return font(13.0f, true); }
+juce::Font GrainveilLookAndFeel::getAlertWindowTitleFont() { return font(18.0f, true); }
+juce::Font GrainveilLookAndFeel::getAlertWindowMessageFont() { return font(15.0f); }
+juce::Font GrainveilLookAndFeel::getAlertWindowFont() { return font(13.0f); }
+juce::Font GrainveilLookAndFeel::getTextButtonFont(juce::TextButton&, int height)
+{
+    return font(juce::jmin(13.0f, static_cast<float>(height) * 0.65f), true);
+}
+
+void GrainveilLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& button,
+                                                const juce::Colour&, bool highlighted, bool down)
+{
+    const auto bounds = button.getLocalBounds().toFloat().reduced(0.5f);
+    g.setColour(down ? juce::Colour(0xff3b4438) : (highlighted ? juce::Colour(0xff343b34) : juce::Colour(0xff1a201d)));
+    g.fillRoundedRectangle(bounds, 4.0f);
+    g.setColour(highlighted ? Palette::warm : Palette::muted.withAlpha(0.7f));
+    g.drawRoundedRectangle(bounds, 4.0f, 1.0f);
+}
+
+void GrainveilLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& button, bool, bool)
+{
+    g.setColour(Palette::text.withMultipliedAlpha(button.isEnabled() ? 1.0f : 0.45f));
+    drawFittedText(g, button.getButtonText(), button.getLocalBounds().toFloat().reduced(8.0f, 3.0f),
+                   getTextButtonFont(button, button.getHeight()).getHeight(), 9.0f, juce::Justification::centred, true);
+}
 
 juce::Label* GrainveilLookAndFeel::createSliderTextBox(juce::Slider& slider)
 {
@@ -216,7 +246,7 @@ juce::Rectangle<int> GrainveilLookAndFeel::getTooltipBounds(const juce::String& 
                                                             juce::Rectangle<int> parent)
 {
     const auto textWidth = juce::GlyphArrangement::getStringWidth(font(12.0f), text);
-    const int w = juce::jmin(320, juce::jmax(80, static_cast<int>(std::ceil(textWidth)) + 24));
+    const int w = juce::jmin(juce::jmax(1, parent.getWidth()), juce::jmax(80, static_cast<int>(std::ceil(textWidth)) + 24));
     return juce::Rectangle<int>(pos.x + 16, pos.y + 20, w, 28).constrainedWithin(parent);
 }
 

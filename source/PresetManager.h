@@ -63,6 +63,7 @@ private:
     std::array<std::atomic<float>, parameterCount> baseline {};
     std::atomic<int> currentIndex { 0 };
     std::atomic<int> pendingIndex { -1 };
+    static_assert(std::atomic<const Catalog*>::is_always_lock_free, "Program catalog requires lock-free pointer atomics");
     std::atomic<const Catalog*> publishedCatalog { nullptr };
     // Bounded to maxUserPresets + 1 immutable catalog snapshots. Published
     // snapshots remain alive for concurrent host enumeration until destruction.

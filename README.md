@@ -62,8 +62,8 @@ parameters, stored in `Documents/Grainveil/Presets` on Windows and
 `~/Library/Audio/Presets/Grainveil` on macOS. UI file operations and host notifications
 run on the message thread; a host program request is queued atomically and applied on
 the next message-thread timer tick. The session state stores the selected preset identity
-and baseline as well as the current values; old sessions without this metadata still load
-as modified Init. If a user preset file is missing at project reopen, the audio parameters
+and baseline as well as the current values; old sessions without this metadata load as
+Init, marked modified if their parameters differ from the defaults. If a user preset file is missing at project reopen, the audio parameters
 are restored but the selection falls back to Init.
 
 For stable VST3 program-change automation, each instance exposes **64 fixed user slots**

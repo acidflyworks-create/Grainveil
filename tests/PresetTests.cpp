@@ -101,6 +101,17 @@ int main()
         restored.getPresetManager().servicePendingProgram();
         check(near(restoredMix->convertFrom0to1(restoredMix->getValue()), .37f), "session stored baseline can be reloaded");
 
+        const auto presetFile = root.getChildFile(longName + ".gvpreset");
+        const auto validFile = presetFile.loadFileAsString();
+        check(presetFile.replaceWithText("<GrainveilPreset version=\"1\"><Parameter id=\"mix\" value=\"nan\"/></GrainveilPreset>"), "write corrupt test preset");
+        p.setCurrentProgram(0);
+        manager.servicePendingProgram();
+        p.setCurrentProgram(userProgram);
+        manager.servicePendingProgram();
+        check(p.getCurrentProgram() == 0, "invalid preset must not partially load or change selection");
+        check(manager.consumeError().isNotEmpty(), "invalid preset reports an error");
+        check(presetFile.replaceWithText(validFile), "restore test preset");
+
         p.prepareToPlay(48000, 128);
         juce::AudioBuffer<float> audio(2, 128);
         juce::MidiBuffer midi;

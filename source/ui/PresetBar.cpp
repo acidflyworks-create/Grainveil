@@ -134,7 +134,7 @@ void PresetBar::refresh()
         displayedName = name;
         presetName.setButtonText(name);
         presetName.setModified(modified);
-        presetName.setTooltip(name + (modified ? " (modified)" : "") + " - click to browse, wheel to change");
+        presetName.setTooltip(name + (modified ? " (modified)" : ""));
         presetName.setTitle("Preset: " + name + (modified ? " (modified)" : ""));
     }
     const auto error = manager.consumeError();
