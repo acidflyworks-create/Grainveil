@@ -98,6 +98,28 @@ void GrainveilLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int
     const float angle = start + juce::jlimit(0.0f, 1.0f, position) * (end - start);
     const bool active = slider.isMouseOverOrDragging();
 
+    // JUCE passes getSliderLayout(slider).sliderBounds as x/y/width/height;
+    // the centre is therefore the rotary area, not the editable value box.
+    const float cap = radius * 0.73f;
+    const auto capBounds = juce::Rectangle<float>(cx - cap, cy - cap, cap * 2.0f, cap * 2.0f);
+
+    // Stationary shadow, recess and tick ring: these never follow the value.
+    g.setColour(juce::Colours::black.withAlpha(0.38f));
+    g.fillEllipse(capBounds.translated(0.0f, 3.0f).expanded(2.0f));
+    g.setColour(juce::Colour(0xff161b18));
+    g.fillEllipse(capBounds.expanded(1.0f));
+    constexpr int ticks = 21;
+    g.setColour(Palette::muted.withAlpha(0.65f));
+    for (int i = 0; i < ticks; ++i)
+    {
+        const float t = static_cast<float>(i) / static_cast<float>(ticks - 1);
+        const float a = start + t * (end - start);
+        const float inner = radius + 4.0f, outer = radius + (i % 5 == 0 ? 7.0f : 5.5f);
+        g.drawLine(cx + std::sin(a) * inner, cy - std::cos(a) * inner,
+                   cx + std::sin(a) * outer, cy - std::cos(a) * outer, 1.0f);
+    }
+
+    // Stationary track geometry; only the length of the value arc changes.
     juce::Path arc;
     arc.addCentredArc(cx, cy, radius - 1.0f, radius - 1.0f, 0.0f, start, end, true);
     g.setColour(juce::Colour(0xff565c55).withAlpha(0.55f));
@@ -107,36 +129,30 @@ void GrainveilLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int
     g.setColour(active ? Palette::warmBright : Palette::warm);
     g.strokePath(valueArc, juce::PathStrokeType(2.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-    constexpr int ticks = 21;
-    for (int i = 0; i < ticks; ++i)
+    // Only the cap and its 12 o'clock notch rotate about the rotary centre.
     {
-        const float t = static_cast<float>(i) / static_cast<float>(ticks - 1);
-        const float a = start + t * (end - start);
-        const float inner = radius + 4.0f, outer = radius + (i % 5 == 0 ? 7.0f : 5.5f);
-        g.setColour((t <= position ? Palette::warm : Palette::muted).withAlpha(t <= position ? 0.8f : 0.45f));
-        g.drawLine(cx + std::sin(a) * inner, cy - std::cos(a) * inner,
-                   cx + std::sin(a) * outer, cy - std::cos(a) * outer, 1.0f);
+        juce::Graphics::ScopedSaveState saved(g);
+        g.addTransform(juce::AffineTransform::rotation(angle).translated(cx, cy));
+        const auto localCap = juce::Rectangle<float>(-cap, -cap, cap * 2.0f, cap * 2.0f);
+        juce::ColourGradient capGradient(active ? juce::Colour(0xff696d65) : juce::Colour(0xff5d625b),
+                                         -cap * 0.35f, -cap,
+                                         juce::Colour(0xff202422), cap * 0.3f, cap, false);
+        g.setGradientFill(capGradient);
+        g.fillEllipse(localCap);
+        g.setColour(juce::Colour(0xff8b9086).withAlpha(active ? 0.8f : 0.5f));
+        g.drawEllipse(localCap.reduced(0.5f), 1.0f);
+        g.setColour(juce::Colour(0xff181b1a));
+        g.drawEllipse(localCap.reduced(cap * 0.15f), 1.0f);
+        // Off-centre cap detail makes rotation visible independently of the notch.
+        g.setColour(juce::Colours::black.withAlpha(0.23f));
+        g.drawLine(-cap * 0.34f, cap * 0.34f, cap * 0.28f, cap * 0.52f, 1.2f);
+        g.setColour(active ? Palette::warmBright : Palette::warm);
+        g.drawLine(0.0f, -cap * 0.38f, 0.0f, -cap * 0.77f, 2.7f);
     }
 
-    const float cap = radius * 0.73f;
-    auto capBounds = juce::Rectangle<float>(cx - cap, cy - cap, cap * 2.0f, cap * 2.0f);
-    g.setColour(juce::Colours::black.withAlpha(0.38f));
-    g.fillEllipse(capBounds.translated(0.0f, 3.0f).expanded(2.0f));
-    juce::ColourGradient capGradient(active ? juce::Colour(0xff696d65) : juce::Colour(0xff5d625b),
-                                     cx - cap * 0.35f, cy - cap,
-                                     juce::Colour(0xff202422), cx + cap * 0.3f, cy + cap, false);
-    g.setGradientFill(capGradient);
-    g.fillEllipse(capBounds);
-    g.setColour(juce::Colour(0xff8b9086).withAlpha(active ? 0.8f : 0.5f));
-    g.drawEllipse(capBounds.reduced(0.5f), 1.0f);
-    g.setColour(juce::Colour(0xff181b1a));
-    g.drawEllipse(capBounds.reduced(cap * 0.15f), 1.0f);
+    // A separate, stationary overhead highlight, not part of the rotating cap.
     g.setColour(juce::Colours::white.withAlpha(0.10f));
     g.drawEllipse(capBounds.reduced(cap * 0.22f).withTrimmedBottom(cap * 0.55f), 0.7f);
-    const float innerPointer = cap * 0.38f, outerPointer = cap * 0.77f;
-    g.setColour(active ? Palette::warmBright : Palette::warm);
-    g.drawLine(cx + std::sin(angle) * innerPointer, cy - std::cos(angle) * innerPointer,
-               cx + std::sin(angle) * outerPointer, cy - std::cos(angle) * outerPointer, 2.7f);
 }
 
 void GrainveilLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height, bool down,
