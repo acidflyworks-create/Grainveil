@@ -15,7 +15,7 @@ namespace GrainveilDsp
 {
     struct EngineParams
     {
-        float mix           = 0.5f;
+        float mix           = 0.6f;
         float inGainDb      = 0.0f;
         float outGainDb     = 0.0f;
         bool  freeze        = false;
@@ -66,6 +66,10 @@ namespace GrainveilDsp
             smoothedGrainSizeMs.reset(sampleRate, 0.03);
             smoothedDensityHz.reset(sampleRate, 0.03);
             smoothedPitchSt.reset(sampleRate, 0.02);
+            smoothedScatter.reset(sampleRate, 0.03);
+            smoothedPitchRand.reset(sampleRate, 0.03);
+            smoothedReverse.reset(sampleRate, 0.03);
+            smoothedSpread.reset(sampleRate, 0.03);
             smoothedTone.reset(sampleRate, 0.03);
 
             reset();
@@ -97,6 +101,10 @@ namespace GrainveilDsp
             smoothedGrainSizeMs.setTargetValue(params.grainSizeMs);
             smoothedDensityHz.setTargetValue(params.densityHz);
             smoothedPitchSt.setTargetValue(params.pitchSt);
+            smoothedScatter.setTargetValue(std::clamp(params.scatter, 0.0f, 1.0f));
+            smoothedPitchRand.setTargetValue(std::clamp(params.pitchRand, 0.0f, 1.0f));
+            smoothedReverse.setTargetValue(std::clamp(params.reverseAmt, 0.0f, 1.0f));
+            smoothedSpread.setTargetValue(std::clamp(params.spread, 0.0f, 1.0f));
             smoothedTone.setTargetValue(std::clamp(params.tone, 0.0f, 1.0f));
 
             auto* left  = buffer.getWritePointer(0);
@@ -116,6 +124,10 @@ namespace GrainveilDsp
                 const double sizeMs    = static_cast<double>(smoothedGrainSizeMs.getNextValue());
                 const double densityHz = static_cast<double>(smoothedDensityHz.getNextValue());
                 const float pitchSt    = smoothedPitchSt.getNextValue();
+                const float scatter    = smoothedScatter.getNextValue();
+                const float pitchRand  = smoothedPitchRand.getNextValue();
+                const float reverse    = smoothedReverse.getNextValue();
+                const float spread     = smoothedSpread.getNextValue();
                 const float toneVal    = smoothedTone.getNextValue();
 
                 const float dryL = left[i];
@@ -140,19 +152,23 @@ namespace GrainveilDsp
                                         capMs,
                                         sizeMs,
                                         densityHz,
-                                        params.scatter,
-                                        params.reverseAmt,
+                                        scatter,
+                                        reverse,
                                         pitchSt,
-                                        params.pitchRand,
-                                        params.spread,
+                                        pitchRand,
+                                        spread,
                                         wetL,
                                         wetR);
 
-                const float wetCutoff = std::min(maxCutoff, 600.0f * std::pow(30.0f, toneVal));
+                // Lower half sweeps a dark low-pass; upper half adds a high
+                // shelf, so the bright end can be genuinely aggressive.
+                const float wetCutoff = std::min(maxCutoff, 600.0f * std::pow(5.0f, std::min(1.0f, toneVal * 2.0f)));
                 wetToneFilter.setCutoffFrequency(wetCutoff);
-
-                wetL = std::tanh(wetToneFilter.processSample(0, sanitize(wetL)));
-                wetR = std::tanh(wetToneFilter.processSample(1, sanitize(wetR)));
+                const float lowL = wetToneFilter.processSample(0, sanitize(wetL));
+                const float lowR = wetToneFilter.processSample(1, sanitize(wetR));
+                const float highs = 3.0f * std::max(0.0f, toneVal * 2.0f - 1.0f);
+                wetL = std::tanh(lowL + highs * (sanitize(wetL) - lowL));
+                wetR = std::tanh(lowR + highs * (sanitize(wetR) - lowR));
 
                 prevWetL = wetL;
                 prevWetR = wetR;
@@ -244,6 +260,10 @@ namespace GrainveilDsp
         juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedGrainSizeMs;
         juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedDensityHz;
         juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedPitchSt;
+        juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedScatter;
+        juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedPitchRand;
+        juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedReverse;
+        juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedSpread;
         juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedTone;
     };
 }

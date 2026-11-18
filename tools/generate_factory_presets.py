@@ -32,7 +32,7 @@ RANGES = {
     "mix": ("0", "1", ".001"), "inGain": ("-24", "12", ".1"),
     "outGain": ("-24", "12", ".1"), "freeze": ("0", "1", "1"),
     "captureTime": ("50", "4000", "1"), "feedback": ("0", ".60", ".001"),
-    "fbTone": ("0", "1", ".001"), "grainSize": ("10", "500", ".5"),
+    "fbTone": ("0", "1", ".001"), "grainSize": ("5", "1200", ".5"),
     "density": ("1", "40", ".1"), "scatter": ("0", "1", ".001"),
     "pitch": ("-24", "24", ".1"), "pitchRand": ("0", "1", ".001"),
     "reverseAmt": ("0", "1", ".001"), "spread": ("0", "1", ".001"),
@@ -144,7 +144,7 @@ def generate_table(rows):
                 continue
             v = r["values"]
             values = (
-                f"Mix {percent(v['mix'])}; size {fmt(v['grainSize'])} ms; density {fmt(v['density'])} Hz; "
+                f"Mix {percent(v['mix'])}; size {fmt(v['grainSize'])} ms; density control {fmt(v['density'])}/40; "
                 f"scatter {percent(v['scatter'])}; feedback {percent(v['feedback'])}; pitch {fmt(v['pitch'])} st; "
                 f"capture {fmt(v['captureTime'])} ms; freeze {'on' if v['freeze'] else 'off'}; "
                 f"reverse {percent(v['reverseAmt'])}; pitch rand {percent(v['pitchRand'])}; "

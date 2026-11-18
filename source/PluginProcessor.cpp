@@ -72,7 +72,7 @@ void GrainveilAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juc
         buffer.clear(ch, 0, numSamples);
 
     GrainveilDsp::EngineParams params;
-    params.mix           = (mixParam != nullptr) ? mixParam->load() : 0.5f;
+    params.mix           = (mixParam != nullptr) ? mixParam->load() : 0.6f;
     params.inGainDb      = (inGainParam != nullptr) ? inGainParam->load() : 0.0f;
     params.outGainDb     = (outGainParam != nullptr) ? outGainParam->load() : 0.0f;
     params.freeze        = (freezeParam != nullptr) && (freezeParam->load() >= 0.5f);

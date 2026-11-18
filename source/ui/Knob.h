@@ -7,7 +7,7 @@
 class GrainveilKnob final : public juce::Slider
 {
 public:
-    enum class Unit { percent, milliseconds, hertz, semitones };
+    enum class Unit { percent, milliseconds, hertz, semitones, density };
 
     GrainveilKnob()
     {
@@ -38,6 +38,7 @@ public:
             case Unit::milliseconds: return juce::String(value, value < 100.0 ? 1 : 0) + " ms";
             case Unit::hertz:        return juce::String(value, 1) + " Hz";
             case Unit::semitones:    return (value > 0.0 ? "+" : "") + juce::String(value, 1) + " st";
+            case Unit::density:      return juce::String(value, 1) + " / 40";
         }
         return {};
     }

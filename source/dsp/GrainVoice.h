@@ -17,6 +17,8 @@ namespace GrainveilDsp
         bool     lofi         = false;
         float    panL         = 0.70710678f;
         float    panR         = 0.70710678f;
+        float    crossL       = 0.0f;
+        float    crossR       = 0.0f;
         double   envPhase     = 0.0;
         double   envIncrement = 0.0;
         float    amp          = 1.0f;
@@ -52,8 +54,15 @@ namespace GrainveilDsp
             heldR        = 0.0f;
 
             const float angle = (panNorm * 0.5f + 0.5f) * 1.57079632679f;
-            panL = std::cos(angle);
-            panR = std::sin(angle);
+            const float left = panNorm >= 1.0f ? 0.0f : std::cos(angle);
+            const float right = panNorm <= -1.0f ? 0.0f : std::sin(angle);
+            // Stereo balance with crossfeed: a hard-panned grain includes both
+            // source channels rather than silently discarding the opposite side.
+            const float scale = 0.70710678f / std::max(left, right);
+            panL = left * scale;
+            panR = right * scale;
+            crossL = std::max(0.0f, left - right) * scale;
+            crossR = std::max(0.0f, right - left) * scale;
         }
 
         void processSample(const CircularBuffer& buffer, float& outL, float& outR) noexcept
@@ -87,8 +96,8 @@ namespace GrainveilDsp
             }
 
             const float gain = window * amp;
-            outL += sampleL * gain * panL;
-            outR += sampleR * gain * panR;
+            outL += (sampleL * panL + sampleR * crossL) * gain;
+            outR += (sampleR * panR + sampleL * crossR) * gain;
 
             readPos += reverse ? -rate : rate;
             envPhase += envIncrement;

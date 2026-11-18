@@ -10,11 +10,13 @@ namespace
 {
 constexpr auto ids = GrainveilFactory::parameterIds;
 static_assert(ids.size() == PresetManager::parameterCount, "Factory bank must cover all parameters");
-constexpr int presetFileVersion = 1;
-constexpr int sessionVersion = 1;
+constexpr int presetFileVersion = 2;
+constexpr int sessionVersion = 2;
 
 bool parseValues(const juce::XmlElement& element, PresetManager::Values& values)
 {
+    const int version = element.getIntAttribute("version", -1);
+    if (version != 1 && version != 2) return false;
     std::array<bool, PresetManager::parameterCount> seen {};
     PresetManager::Values parsed {};
     for (const auto* child : element.getChildIterator())
@@ -36,6 +38,16 @@ bool parseValues(const juce::XmlElement& element, PresetManager::Values& values)
         seen[index] = true;
     }
     if (! std::all_of(seen.begin(), seen.end(), [](bool present) { return present; })) return false;
+    if (version == 1)
+    {
+        // V1 stored normalized values using the old 10..500 ms skewed range.
+        // Preserve the physical grain size when loading old user/session data.
+        const juce::NormalisableRange<float> oldSize(10.0f, 500.0f, 0.5f, 0.5f);
+        const juce::NormalisableRange<float> newSize(5.0f, 1200.0f, 0.5f, 0.5f);
+        constexpr size_t grainSizeIndex = 7;
+        const float physical = oldSize.snapToLegalValue(oldSize.convertFrom0to1(parsed[grainSizeIndex]));
+        parsed[grainSizeIndex] = newSize.convertTo0to1(physical);
+    }
     values = parsed;
     return true;
 }
@@ -85,7 +97,7 @@ PresetManager::PresetManager(juce::AudioProcessor& owner, juce::AudioProcessorVa
         if (validateName(name).isNotEmpty() || file.getSize() > 65536) continue;
         auto xml = juce::XmlDocument::parse(file);
         Values parsed;
-        if (xml == nullptr || ! xml->hasTagName("GrainveilPreset") || xml->getIntAttribute("version", -1) != presetFileVersion || ! parseValues(*xml, parsed)) continue;
+        if (xml == nullptr || ! xml->hasTagName("GrainveilPreset") || ! parseValues(*xml, parsed)) continue;
         const int slot = xml->getIntAttribute("slot", -1);
         if (slot < 0 || slot >= maxUserPresets || initial->users[static_cast<size_t>(slot)].name.isNotEmpty()) continue;
         const auto duplicate = std::any_of(initial->users.begin(), initial->users.end(),
@@ -269,8 +281,7 @@ bool PresetManager::refreshCatalogFromDisk(juce::String& error)
         if (validateName(name).isNotEmpty() || file.getSize() > 65536) continue;
         auto xml = juce::XmlDocument::parse(file);
         Values parsed;
-        if (xml == nullptr || ! xml->hasTagName("GrainveilPreset")
-            || xml->getIntAttribute("version", -1) != presetFileVersion || ! parseValues(*xml, parsed)) continue;
+        if (xml == nullptr || ! xml->hasTagName("GrainveilPreset") || ! parseValues(*xml, parsed)) continue;
         const int slot = xml->getIntAttribute("slot", -1);
         if (slot < 0 || slot >= maxUserPresets) continue;
         const int existing = findUser(name);
@@ -342,7 +353,7 @@ bool PresetManager::readUser(const juce::File& file, Values& values, juce::Strin
         error = "Preset file is missing or too large: " + file.getFileName(); return false;
     }
     auto xml = juce::XmlDocument::parse(file);
-    if (xml == nullptr || ! xml->hasTagName("GrainveilPreset") || xml->getIntAttribute("version", -1) != presetFileVersion || ! parseValues(*xml, values))
+    if (xml == nullptr || ! xml->hasTagName("GrainveilPreset") || ! parseValues(*xml, values))
     {
         error = "Preset file is invalid or uses an unsupported version: " + file.getFileName(); return false;
     }
@@ -365,7 +376,7 @@ void PresetManager::restoreSessionMetadata(const juce::XmlElement* meta)
 {
     Values values = defaultValues();
     int index = initProgram();
-    if (meta != nullptr && meta->getIntAttribute("version", -1) == sessionVersion && parseValues(*meta, values))
+    if (meta != nullptr && parseValues(*meta, values))
     {
         const auto type = meta->getStringAttribute("type");
         const auto name = meta->getStringAttribute("name");

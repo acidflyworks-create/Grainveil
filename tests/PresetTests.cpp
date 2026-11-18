@@ -89,12 +89,26 @@ int main()
         juce::XmlElement legacyState("LegacySession");
         manager.writeSessionMetadata(legacyState);
         auto* legacyMeta = legacyState.getChildByName("GrainveilProgram");
-        check(legacyMeta != nullptr && legacyMeta->getIntAttribute("version") == 1, "session metadata remains v1 compatible");
+        check(legacyMeta != nullptr && legacyMeta->getIntAttribute("version") == 2, "new session metadata version");
+        if (legacyMeta != nullptr)
+        {
+            legacyMeta->setAttribute("version", 1);
+            const juce::NormalisableRange<float> oldRange(10.0f, 500.0f, 0.5f, 0.5f);
+            for (auto* child : legacyMeta->getChildIterator())
+                if (child->getStringAttribute("id") == GrainveilParams::grainSize)
+                    child->setAttribute("value", juce::String(static_cast<double>(oldRange.convertTo0to1(320.0f)), 9));
+        }
         p.setCurrentProgram(PresetManager::initProgram());
         manager.servicePendingProgram();
         manager.restoreSessionMetadata(legacyMeta);
         check(p.getCurrentProgram() == 7 && p.getProgramName(7) == "Guitar Swell", "v1 factory metadata resolved by name");
         check(manager.isModified(), "legacy baseline remains distinct from current parameters");
+        for (size_t j = 0; j < GrainveilFactory::parameterIds.size(); ++j)
+        {
+            auto* param = p.getAPVTS().getParameter(GrainveilFactory::parameterIds[j]);
+            param->setValueNotifyingHost(param->convertTo0to1(GrainveilFactory::presets[7].values[j]));
+        }
+        check(! manager.isModified(), "legacy session baseline migrates original physical grain size");
         p.setCurrentProgram(PresetManager::initProgram());
         manager.servicePendingProgram();
 
@@ -170,6 +184,22 @@ int main()
 
         const auto presetFile = root.getChildFile(longName + ".gvpreset");
         const auto validFile = presetFile.loadFileAsString();
+        auto legacyFile = juce::XmlDocument::parse(validFile);
+        check(legacyFile != nullptr && legacyFile->getIntAttribute("version") == 2, "new user preset version");
+        if (legacyFile != nullptr)
+        {
+            legacyFile->setAttribute("version", 1);
+            const juce::NormalisableRange<float> oldRange(10.0f, 500.0f, 0.5f, 0.5f);
+            for (auto* child : legacyFile->getChildIterator())
+                if (child->getStringAttribute("id") == GrainveilParams::grainSize)
+                    child->setAttribute("value", juce::String(static_cast<double>(oldRange.convertTo0to1(220.0f)), 9));
+            check(presetFile.replaceWithText(legacyFile->toString()), "write legacy preset fixture");
+            p.setCurrentProgram(userProgram);
+            manager.servicePendingProgram();
+            auto* size = p.getAPVTS().getParameter(GrainveilParams::grainSize);
+            check(std::abs(size->convertFrom0to1(size->getValue()) - 220.0f) < .01f, "legacy preset preserves physical grain size");
+            check(presetFile.replaceWithText(validFile), "restore current preset fixture");
+        }
         check(presetFile.replaceWithText("<GrainveilPreset version=\"1\"><Parameter id=\"mix\" value=\"nan\"/></GrainveilPreset>"), "write corrupt test preset");
         p.setCurrentProgram(PresetManager::initProgram());
         manager.servicePendingProgram();

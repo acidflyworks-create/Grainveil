@@ -40,7 +40,7 @@ GrainveilAudioProcessorEditor::GrainveilAudioProcessorEditor(GrainveilAudioProce
     using Unit = GrainveilKnob::Unit;
     setupKnob(mixSlider,      mixLabel,      "MIX",      Unit::percent,      "Blend dry and granular signals");
     setupKnob(sizeSlider,     sizeLabel,     "SIZE",     Unit::milliseconds, "Set grain duration");
-    setupKnob(densitySlider,  densityLabel,  "DENSITY",  Unit::hertz,        "Set the grain generation rate");
+    setupKnob(densitySlider,  densityLabel,  "DENSITY",  Unit::density,      "Set grain overlap from sparse to a full voice pool");
     setupKnob(scatterSlider,  scatterLabel,  "SCATTER",  Unit::percent,      "Vary grain positions in the buffer");
     setupKnob(feedbackSlider, feedbackLabel, "FEEDBACK", Unit::percent,      "Return processed signal to the buffer");
     setupKnob(pitchSlider,    pitchLabel,    "PITCH",    Unit::semitones,    "Transpose the grains");

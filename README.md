@@ -46,9 +46,8 @@ available below the knob. Mode and freeze indicators follow the existing UI atta
 
 The screen shows the current preset, mode and freeze status. Its live waveform and
 grain markers use a bounded, lock-free atomic telemetry exchange published roughly
-30 times per second. Only telemetry publication changed; the granular signal path
-and parameter IDs are unchanged. The monitor remains unavailable until audio has
-been processed at least once.
+30 times per second. The monitor remains unavailable until audio has been processed
+at least once.
 
 ### Preset bar and host programs
 
@@ -82,6 +81,24 @@ host program-change automation or host-managed numeric program references may th
 select a different program, even for the original eight; verify and reassign them before
 upgrading. Session metadata identifies presets by name and the saved parameter state still
 loads; actual DAW compatibility must be checked in each host.
+
+### Sound mapping (S1)
+
+Grain Size is 5–1200 ms before mode scaling/jitter. Density retains its 1–40
+parameter range but now controls overlap, not grains per second: minimum targets
+about three grains and maximum drives the 32-voice pool. Scatter zero locks each
+mode's read anchor; maximum samples the full capture window. Spread maximum
+hard-pans individual grains, with stereo crossfeed. Tone sweeps from a dark low-pass
+to boosted highs. Init Mix is 60%; the linear mix reaches fully wet after its 20 ms
+smoothing ramp. Mode-specific size, jitter, pitch, reverse and lo-fi rules remain;
+the existing mode density factors now shape the overlap response rather than multiply
+an absolute Hz rate. No mode-specific retuning was performed.
+
+The wider grain-size range changes the mapping of host-normalized automation, even
+though the parameter ID and name are unchanged. Review existing size automation
+when upgrading. Version-1 user preset and session-baseline values are migrated to
+preserve their physical grain-size setting; sound itself will differ because the
+DSP mapping changed. New preset/session metadata uses version 2.
 
 The [factory preset table](docs/FACTORY_PRESETS.md) lists all 45 programs, their modes and
 key values. Their complete 19-parameter data is maintained in `presets/factory-v2.csv`;
