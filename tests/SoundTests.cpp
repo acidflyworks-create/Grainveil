@@ -181,7 +181,10 @@ int main()
                 }
             }
             p.freeze = freeze;
-            a.process(first, p); b.process(second, p);
+            p.feedback = 0;
+            a.process(first, p);
+            p.feedback = freeze ? .95f : 0.0f;
+            b.process(second, p);
             if (block * blockSize > sampleRate * 2)
                 for (int i = 0; i < blockSize; ++i)
                 {
