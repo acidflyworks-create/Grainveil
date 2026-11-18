@@ -48,6 +48,21 @@ int main()
 
     {
         GrainveilDsp::GrainVoice v;
+        v.trigger(10000, 2048, 1, true, false, 0, 1, 1, GrainveilDsp::GrainVoice::Window::edge, 144, true);
+        float first = 0, early = 0, late = 0, last = 0;
+        for (int i = 0; i < 2048; ++i)
+        {
+            float l = 0, r = 0; v.processSample(constant, l, r);
+            if (i == 0) first = l;
+            if (i == 512) early = l;
+            if (i == 1536) late = l;
+            if (i == 2047) last = l;
+        }
+        check(std::abs(first) < 1e-6f && std::abs(last) < 1e-5f && late > early * 1.5f,
+              "reverse swell rises while retaining short zero-valued edges");
+    }
+    {
+        GrainveilDsp::GrainVoice v;
         v.trigger(30000, 2048, 1, true, false, 0, 1, 1, GrainveilDsp::GrainVoice::Window::edge, 144);
         float a = 0, b = 0;
         for (int i = 0; i < 600; ++i)

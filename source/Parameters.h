@@ -44,7 +44,7 @@ namespace GrainveilParams
 
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{ mix, 1 }, "Mix",
-            juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.6f));
+            juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.65f));
 
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{ inGain, 1 }, "Input Gain",
@@ -63,7 +63,7 @@ namespace GrainveilParams
 
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{ feedback, 1 }, "Feedback",
-            juce::NormalisableRange<float>(0.0f, 0.95f, 0.001f), 0.25f));
+            juce::NormalisableRange<float>(0.0f, 0.95f, 0.001f), 0.16f));
 
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{ fbTone, 1 }, "FB Tone",
@@ -71,15 +71,15 @@ namespace GrainveilParams
 
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{ grainSize, 1 }, "Grain Size",
-            juce::NormalisableRange<float>(5.0f, 1200.0f, 0.5f, 0.5f), 120.0f));
+            juce::NormalisableRange<float>(5.0f, 1200.0f, 0.5f, 0.5f), 160.0f));
 
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{ density, 1 }, "Density",
-            juce::NormalisableRange<float>(1.0f, 40.0f, 0.1f, 0.5f), 10.0f));
+            juce::NormalisableRange<float>(1.0f, 40.0f, 0.1f, 0.5f), 14.0f));
 
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{ scatter, 1 }, "Scatter",
-            juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.2f));
+            juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.35f));
 
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{ pitch, 1 }, "Pitch",

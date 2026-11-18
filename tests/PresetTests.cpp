@@ -32,25 +32,11 @@ int main()
         check(p.getProgramName(0) == "Ambient Wash", "original factory program indices preserved");
         check(! manager.isModified(), "initial state should be unmodified");
         check(p.getNumPrograms() == 46 + PresetManager::maxUserPresets, "stable host program count");
-        check(GrainveilFactory::dataVersion == 2 && PresetManager::initProgram() == 45, "factory bank version and count");
-        // Original v1 programs, including values that were formerly implicit defaults.
+        check(GrainveilFactory::dataVersion == 3 && PresetManager::initProgram() == 45, "factory bank version and count");
+        // The S3 bank changes factory sounds but preserves these host indices.
         const std::array<const char*, 8> originalNames {{ "Ambient Wash", "Frozen Drone", "Reverse Swell", "Glitch Rhythm", "Pitch Cloud", "Tight Echo-Grain", "Lo-Fi Loop", "Guitar Swell" }};
-        const std::array<std::array<float, 19>, 8> originalValues {{
-            {{.55f,0,0,0,1000,.45f,.5f,220,18,.35f,0,0,.15f,.8f,.7f,0,.5f,0,0}},
-            {{.75f,0,0,1,1000,.3f,.5f,360,12,.25f,0,0,.2f,.7f,.55f,3,.5f,0,0}},
-            {{.65f,0,0,0,1000,.4f,.5f,260,14,.3f,0,0,.9f,.65f,.65f,2,.5f,0,0}},
-            {{.6f,0,0,0,1000,.35f,.5f,45,26,.75f,0,0,.35f,.85f,.8f,4,.5f,0,0}},
-            {{.55f,0,0,0,1000,.5f,.5f,190,16,.4f,12,.6f,0,.75f,.65f,5,.5f,0,0}},
-            {{.45f,0,0,0,420,.45f,.5f,110,8,.1f,0,0,0,.4f,.75f,1,.5f,0,0}},
-            {{.65f,0,0,0,1200,.55f,.5f,160,11,.45f,0,0,0,.5f,.4f,7,.5f,0,0}},
-            {{.6f,0,0,0,1000,.4f,.5f,320,16,.2f,0,0,.25f,.75f,.72f,6,.5f,0,0}}
-        }};
         for (size_t i = 0; i < originalNames.size(); ++i)
-        {
-            check(p.getProgramName(static_cast<int>(i)) == originalNames[i], "v1 factory name and index preserved");
-            for (size_t j = 0; j < originalValues[i].size(); ++j)
-                check(near(GrainveilFactory::presets[i].values[j], originalValues[i][j]), "v1 factory values preserved");
-        }
+            check(p.getProgramName(static_cast<int>(i)) == originalNames[i], "original factory name and index preserved");
         juce::StringArray categories { "Ambient Wash", "Frozen Drones", "Reverse Swells", "Glitch & Stutter", "Pitch Clouds", "Echo Grains", "Lo-Fi / Degraded", "Guitar Textures", "Sound Design / Experimental" };
         for (const auto& category : categories)
         {

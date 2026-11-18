@@ -26,6 +26,7 @@ namespace GrainveilDsp
         enum class Window { hann, edge };
         Window   windowType   = Window::hann;
         double   edgeSamples  = 1.0;
+        bool     swell        = false;
         float    lastL        = 0.0f;
         float    lastR        = 0.0f;
         float    stealL       = 0.0f;
@@ -54,7 +55,8 @@ namespace GrainveilDsp
                      float amplitude,
                      uint64_t voiceAge,
                      Window newWindow = Window::hann,
-                     double requestedEdgeSamples = 64.0) noexcept
+                     double requestedEdgeSamples = 64.0,
+                     bool useSwell = false) noexcept
         {
             // Preserve the last output as a bounded 64-sample fade when a
             // busy slot is stolen. No extra voice or allocation is required.
@@ -74,6 +76,7 @@ namespace GrainveilDsp
             envPhase     = 0.0;
             envIncrement = 1.0 / size;
             windowType   = newWindow;
+            swell        = useSwell;
             edgeSamples  = std::clamp(requestedEdgeSamples, 1.0, std::max(1.0, (size - 1.0) * 0.5));
             amp          = amplitude;
             age          = voiceAge;
@@ -120,6 +123,11 @@ namespace GrainveilDsp
                     window = 0.5f * (1.0f - static_cast<float>(std::cos(pi * edge)));
                 }
 
+                // Keep the short click-protection edges, while shaping a
+                // separate rising body for ReverseSwarm's backwards swell.
+                if (swell)
+                    window *= static_cast<float>(0.25 + 0.75 * std::min(1.0, envPhase / 0.8));
+
                 double loopStart = 0.0, loopEnd = 0.0, loopFade = 0.0;
                 if (frozen && captureSamples >= 32.0)
                 {
@@ -158,7 +166,7 @@ namespace GrainveilDsp
                     {
                         heldL = readSample(0);
                         heldR = readSample(1);
-                        holdCounter = 4;
+                        holdCounter = 8; // Ash: coarser in-grain sample-and-hold
                     }
                     --holdCounter;
                     sampleL = heldL; sampleR = heldR;

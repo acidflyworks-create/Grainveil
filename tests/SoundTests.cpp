@@ -26,7 +26,7 @@ int main()
         auto* size = processor.getAPVTS().getParameter(GrainveilParams::grainSize);
         auto* mix = processor.getAPVTS().getParameter(GrainveilParams::mix);
         check(size != nullptr && size->convertFrom0to1(0) == 5 && size->convertFrom0to1(1) == 1200, "grain size range");
-        check(mix != nullptr && std::abs(mix->convertFrom0to1(mix->getDefaultValue()) - .6f) < .001f, "60 percent init mix");
+        check(mix != nullptr && std::abs(mix->convertFrom0to1(mix->getDefaultValue()) - .65f) < .001f, "65 percent init mix");
     }
     {
         GrainveilDsp::GrainEngine engine;

@@ -13,7 +13,7 @@ import pathlib
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "presets/factory-v2.csv"
+SOURCE = ROOT / "presets/factory-v3.csv"
 HEADER = ROOT / "source/FactoryPresets.h"
 TABLE = ROOT / "docs/FACTORY_PRESETS.md"
 CATEGORIES = [
@@ -31,7 +31,7 @@ MODE_NAMES = ["Cloud", "EchoGrain", "ReverseSwarm", "IceHold", "Fracture", "Pitc
 RANGES = {
     "mix": ("0", "1", ".001"), "inGain": ("-24", "12", ".1"),
     "outGain": ("-24", "12", ".1"), "freeze": ("0", "1", "1"),
-    "captureTime": ("50", "4000", "1"), "feedback": ("0", ".60", ".001"),
+    "captureTime": ("50", "4000", "1"), "feedback": ("0", ".50", ".001"),
     "fbTone": ("0", "1", ".001"), "grainSize": ("5", "1200", ".5"),
     "density": ("1", "40", ".1"), "scatter": ("0", "1", ".001"),
     "pitch": ("-24", "24", ".1"), "pitchRand": ("0", "1", ".001"),
@@ -42,6 +42,13 @@ RANGES = {
 }
 OLD_NAMES = ["Ambient Wash", "Frozen Drone", "Reverse Swell", "Glitch Rhythm", "Pitch Cloud",
              "Tight Echo-Grain", "Lo-Fi Loop", "Guitar Swell"]
+EXTREME_NAMES = {
+    "Glitch Rhythm", "Pitch Cloud", "Silver Canopy", "Night Air", "Crystal Still",
+    "Sundown Return", "Distant Inhale", "Glass Tide", "Needle Burst", "Scatterstep",
+    "Static Shards", "Shimmer Arc", "Octave Drift", "Prismatic Third", "Wandering Echo",
+    "Dusk Repeater", "Tape Motes", "Broken Velvet", "Chime Bloom", "Fault Lines",
+    "Metal Vortex", "Ghost Circuit", "Orbit Debris", "Feral Memory",
+}
 D = decimal.Decimal
 
 
@@ -86,7 +93,16 @@ def load():
         if fingerprint in fingerprints:
             raise ValueError(f"{name}: parameter set duplicates another preset")
         fingerprints.add(fingerprint)
+        if name in EXTREME_NAMES:
+            bold = (vals["mode"] == 4 or abs(vals["pitch"]) >= 12 or vals["pitchRand"] >= D(".4")
+                    or vals["reverseAmt"] >= D(".7") or vals["scatter"] >= D(".7") or vals["feedback"] >= D(".5"))
+            if vals["mix"] < D("0.8") or not bold:
+                raise ValueError(f"{name}: extreme design needs >=80% wet and an extreme control")
+        if vals["freeze"] != 0:
+            raise ValueError(f"{name}: presets must capture audio before freeze is engaged")
         row["values"] = vals
+    if len(EXTREME_NAMES) < 15 or not EXTREME_NAMES.issubset({r["name"] for r in rows}):
+        raise ValueError("missing extreme-design factory programs")
     return rows
 
 
@@ -98,9 +114,9 @@ def cfloat(value):
 def generate_header(rows):
     out = [
         "#pragma once", "", "#include \"Parameters.h\"", "#include <array>", "",
-        "// Generated from presets/factory-v2.csv by tools/generate_factory_presets.py.",
+        "// Generated from presets/factory-v3.csv by tools/generate_factory_presets.py.",
         "// Values are in the APVTS parameters' native units; all 19 are explicit.",
-        "namespace GrainveilFactory", "{", "constexpr int dataVersion = 2;",
+        "namespace GrainveilFactory", "{", "constexpr int dataVersion = 3;",
         "inline constexpr std::array<const char*, 19> parameterIds {{",
     ]
     out.append("    " + ", ".join("GrainveilParams::" + p for p in PARAMETERS[:7]) + ",")
@@ -125,18 +141,19 @@ def percent(value):
 
 def generate_table(rows):
     out = [
-        "# Grainveil factory presets — bank v2", "",
+        "# Grainveil factory presets — bank v3", "",
         "Exactly 45 presets in nine categories, five per category. Values are in native parameter units.",
-        "The original eight factory program indices remain 0–7; the table is grouped for browsing.",
+        "Original factory program names and indices remain 0–7; values and sound have changed.",
+        "Twenty-four programs are marked **Extreme** as design intent (≥80% wet, with aggressive",
+        "pitch, scatter, reverse, grain or feedback settings); perceived intensity needs auditioning.",
         "Every preset also sets input gain to 0 dB, and the reserved LFO rate/depth and tempo-sync",
         "parameters to 0.5 Hz / 0 / off. These reserved controls currently do not modulate audio.", "",
-        "**Freeze on** holds whatever is already in the buffer. Feed audio first; an empty buffer",
-        "can produce little or no wet signal. The other Frozen Drones are capture-first: engage Freeze",
-        "manually when you want to hold them.", "",
-        "The levels are conservatively staged (no input/output boost and feedback ≤ 60%); this is",
-        "not loudness matching. Distinctness, loudness and click-free switching need listening tests",
-        "in a DAW with representative source material.", "",
-        "| Category | Preset | Mode | Key parameter values |", "| --- | --- | --- | --- |",
+        "All presets load with Freeze off to allow capture. For Frozen Drones, feed audio first,",
+        "then engage Freeze manually; freezing an empty buffer produces little or no wet signal.", "",
+        "Output gain is -3 dB for general programs and -6 dB for extreme programs; feedback is",
+        "at most 50%. This is conservative gain staging, not loudness matching. Distinctness,",
+        "loudness and click-free switching need listening tests in a DAW.", "",
+        "| Category | Preset | Intent | Mode | Key parameter values |", "| --- | --- | --- | --- | --- |",
     ]
     for category in CATEGORIES:
         for r in rows:
@@ -151,7 +168,8 @@ def generate_table(rows):
                 f"spread {percent(v['spread'])}; tone {percent(v['tone'])}; "
                 f"FB tone {percent(v['fbTone'])}; output {fmt(v['outGain'])} dB"
             )
-            out.append(f"| {category} | {r['name']} | {MODE_NAMES[int(v['mode'])]} | {values} |")
+            intent = "Extreme" if r['name'] in EXTREME_NAMES else "General"
+            out.append(f"| {category} | {r['name']} | {intent} | {MODE_NAMES[int(v['mode'])]} | {values} |")
     out.append("")
     return "\n".join(out)
 

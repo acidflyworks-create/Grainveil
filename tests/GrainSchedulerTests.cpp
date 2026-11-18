@@ -90,12 +90,69 @@ int main()
             check(left > 0 && right > 0, "maximum spread uses both sides", mode);
             if (scatter == 0.0f)
             {
-                const double anchor = mode == 1 ? .85 : .05;
+                const double anchor = GrainveilDsp::modeMapping(mode).anchor;
                 check(std::abs(lo - anchor) < 1e-6 && std::abs(hi - anchor) < 1e-6, "zero scatter locks position", mode);
             }
             else
                 check(lo < .05 && hi > .95, "maximum scatter spans capture window", mode);
         }
+    }
+
+    // Fracture stays in the 5–20 ms band even at extreme user sizes;
+    // ReverseSwarm keeps its floor at a 50% user setting.
+    for (double sizeMs : { 5.0, 304.0, 1200.0 })
+    {
+        GrainveilDsp::GrainScheduler scheduler;
+        scheduler.prepare(sr);
+        for (int i = 0; i < 3000; ++i)
+        {
+            float l = 0, r = 0;
+            scheduler.processSample(buffer, 4, 1000, sizeMs, 30, .5f, 0, 0, 0, 0, l, r);
+            for (const auto& grain : scheduler.getVoices()) if (grain.active)
+                check(grain.size >= sr * .005 - 0.01 && grain.size <= sr * .020 + 0.01, "Fracture size bounded to 5–20 ms");
+        }
+    }
+    {
+        GrainveilDsp::GrainScheduler scheduler;
+        scheduler.prepare(sr);
+        int observed = 0, reverse = 0; uint64_t lastAge = 0;
+        for (int i = 0; i < 12000; ++i)
+        {
+            float l = 0, r = 0;
+            scheduler.processSample(buffer, 2, 1000, 20, 40, .5f, .5f, 0, 0, 0, l, r);
+            for (const auto& grain : scheduler.getVoices()) if (grain.active && grain.age > lastAge)
+            { ++observed; if (grain.reverse) ++reverse; }
+            for (const auto& grain : scheduler.getVoices()) lastAge = std::max(lastAge, grain.age);
+        }
+        check(observed > 200 && static_cast<double>(reverse) / observed > .66, "ReverseSwarm floor at 50% user reverse");
+    }
+    {
+        GrainveilDsp::GrainScheduler scheduler;
+        scheduler.prepare(sr);
+        int observed = 0, intervals = 0; uint64_t lastAge = 0;
+        for (int i = 0; i < 12000; ++i)
+        {
+            float l = 0, r = 0;
+            scheduler.processSample(buffer, 5, 1000, 20, 40, .5f, 0, 0, 0, 0, l, r);
+            for (const auto& grain : scheduler.getVoices()) if (grain.active && grain.age > lastAge)
+            { ++observed; if (std::abs(grain.rate - 1.0) > .1) ++intervals; }
+            for (const auto& grain : scheduler.getVoices()) lastAge = std::max(lastAge, grain.age);
+        }
+        check(observed > 200 && intervals > observed / 2, "PitchBloom biases intervals even without pitch randomness");
+    }
+    {
+        GrainveilDsp::GrainScheduler scheduler;
+        scheduler.prepare(sr);
+        double first = -1, last = -1; uint64_t lastAge = 0;
+        for (int i = 0; i < 96000; ++i)
+        {
+            float l = 0, r = 0;
+            scheduler.processSample(buffer, 3, 1000, 100, 12, 0, 0, 0, 0, 0, l, r, true);
+            for (const auto& grain : scheduler.getVoices()) if (grain.active && grain.age > lastAge)
+            { if (first < 0) first = grain.startPos; last = grain.startPos; }
+            for (const auto& grain : scheduler.getVoices()) lastAge = std::max(lastAge, grain.age);
+        }
+        check(first >= 0 && last >= 0 && std::abs(last - first) > sr * .01, "IceHold frozen start position crawls");
     }
 
     for (int mode : { 0, 1, 3, 4, 5, 6, 7 })

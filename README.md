@@ -74,7 +74,8 @@ Slot numbers are persisted in the files. Multiple instances coordinate writes; f
 created by another instance become visible when saving or on reopening the plugin. Avoid
 manually duplicating a `.gvpreset` file, as two files with the same slot conflict. A host
 may cache program names and require reopening the instance to refresh its list. The original
-eight factory program indices and parameter values remain 0–7. Init moved from index 8 to
+eight factory program names and indices remain 0–7, but their parameter values and sounds
+have changed in bank v3. Init moved from index 8 to
 45 and the user slots moved from 9–72 to 46–109. VST3 represents program automation using
 a normalized value, and increasing the program count also changes its step count. Existing
 host program-change automation or host-managed numeric program references may therefore
@@ -82,17 +83,16 @@ select a different program, even for the original eight; verify and reassign the
 upgrading. Session metadata identifies presets by name and the saved parameter state still
 loads; actual DAW compatibility must be checked in each host.
 
-### Sound mapping (S1)
+### Sound mapping (S3)
 
 Grain Size is 5–1200 ms before mode scaling/jitter. Density retains its 1–40
 parameter range but now controls overlap, not grains per second: minimum targets
 about three grains and maximum drives the 32-voice pool. Scatter zero locks each
-mode's read anchor; maximum samples the full capture window. Spread maximum
-hard-pans individual grains, with stereo crossfeed. Tone sweeps from a dark low-pass
-to boosted highs. Init Mix is 60%; the linear mix reaches fully wet after its 20 ms
-smoothing ramp. Mode-specific size, jitter, pitch, reverse and lo-fi rules remain;
-the existing mode density factors now shape the overlap response rather than multiply
-an absolute Hz rate. No mode-specific retuning was performed.
+mode's read anchor except for IceHold's slow frozen crawl; maximum samples the full
+capture window (subject to that crawl). Spread maximum hard-pans individual grains,
+with stereo crossfeed. Tone sweeps from a dark low-pass to boosted highs. Init Mix is
+65%; the linear mix reaches fully wet after its 20 ms smoothing ramp. Mode-specific
+biases, before/after ranges and limitations are documented in [S3 mode mapping](docs/S3_MODE_MAPPING.md).
 
 The wider grain-size range changes the mapping of host-normalized automation, even
 though the parameter ID and name are unchanged. Review existing size automation
@@ -117,7 +117,7 @@ Automated signal tests cover representative levels and tails, not every source o
 proof of click-free operation; audition and host CPU checks are still needed.
 
 The [factory preset table](docs/FACTORY_PRESETS.md) lists all 45 programs, their modes and
-key values. Their complete 19-parameter data is maintained in `presets/factory-v2.csv`;
+key values. Their complete 19-parameter data is maintained in `presets/factory-v3.csv`;
 run `python tools/generate_factory_presets.py` after editing it and `--check` to validate.
 Factory output levels have not been loudness-matched, and subjective results depend on
 the input material. Existing DSP smoothing covers many continuous parameters, but not every

@@ -15,16 +15,16 @@ namespace GrainveilDsp
 {
     struct EngineParams
     {
-        float mix           = 0.6f;
+        float mix           = 0.65f;
         float inGainDb      = 0.0f;
         float outGainDb     = 0.0f;
         bool  freeze        = false;
         float captureTimeMs = 1000.0f;
-        float feedback      = 0.25f;
+        float feedback      = 0.16f;
         float fbTone        = 0.5f;
-        float grainSizeMs   = 120.0f;
-        float densityHz     = 10.0f;
-        float scatter       = 0.2f;
+        float grainSizeMs   = 160.0f;
+        float densityHz     = 14.0f;
+        float scatter       = 0.35f;
         float reverseAmt    = 0.0f;
         float pitchSt       = 0.0f;
         float pitchRand     = 0.0f;
@@ -99,14 +99,14 @@ namespace GrainveilDsp
 
             auto safe = [](float v, float fallback, float lo, float hi) noexcept
             { return std::clamp(std::isfinite(v) ? v : fallback, lo, hi); };
-            smoothedMix.setTargetValue(safe(params.mix, .6f, 0.0f, 1.0f));
+            smoothedMix.setTargetValue(safe(params.mix, .65f, 0.0f, 1.0f));
             smoothedInGain.setTargetValue(juce::Decibels::decibelsToGain(safe(params.inGainDb, 0, -24, 12)));
             smoothedOutGain.setTargetValue(juce::Decibels::decibelsToGain(safe(params.outGainDb, 0, -24, 12)));
             smoothedCaptureMs.setTargetValue(safe(params.captureTimeMs, 1000, 50, 4000));
             smoothedFeedback.setTargetValue(safe(params.feedback, 0, 0, .95f));
             smoothedFbTone.setTargetValue(safe(params.fbTone, .5f, 0, 1));
-            smoothedGrainSizeMs.setTargetValue(safe(params.grainSizeMs, 120, 5, 1200));
-            smoothedDensityHz.setTargetValue(safe(params.densityHz, 10, 1, 40));
+            smoothedGrainSizeMs.setTargetValue(safe(params.grainSizeMs, 160, 5, 1200));
+            smoothedDensityHz.setTargetValue(safe(params.densityHz, 14, 1, 40));
             smoothedPitchSt.setTargetValue(safe(params.pitchSt, 0, -24, 24));
             smoothedScatter.setTargetValue(safe(params.scatter, 0, 0, 1));
             smoothedPitchRand.setTargetValue(safe(params.pitchRand, 0, 0, 1));
@@ -126,7 +126,7 @@ namespace GrainveilDsp
                 const float inGain     = smoothedInGain.getNextValue();
                 const float outGain    = smoothedOutGain.getNextValue();
                 const double capMs     = static_cast<double>(smoothedCaptureMs.getNextValue());
-                const float fbAmount   = smoothedFeedback.getNextValue();
+                const float fbAmount   = std::min(0.95f, smoothedFeedback.getNextValue() * modeMapping(params.mode).feedback);
                 const float fbToneVal  = smoothedFbTone.getNextValue();
                 const double sizeMs    = static_cast<double>(smoothedGrainSizeMs.getNextValue());
                 const double densityHz = static_cast<double>(smoothedDensityHz.getNextValue());

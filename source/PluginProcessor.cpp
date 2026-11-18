@@ -74,16 +74,16 @@ void GrainveilAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juc
         buffer.clear(ch, 0, numSamples);
 
     GrainveilDsp::EngineParams params;
-    params.mix           = (mixParam != nullptr) ? mixParam->load() : 0.6f;
+    params.mix           = (mixParam != nullptr) ? mixParam->load() : 0.65f;
     params.inGainDb      = (inGainParam != nullptr) ? inGainParam->load() : 0.0f;
     params.outGainDb     = (outGainParam != nullptr) ? outGainParam->load() : 0.0f;
     params.freeze        = (freezeParam != nullptr) && (freezeParam->load() >= 0.5f);
     params.captureTimeMs = (captureTimeParam != nullptr) ? captureTimeParam->load() : 1000.0f;
-    params.feedback      = (feedbackParam != nullptr) ? feedbackParam->load() : 0.25f;
+    params.feedback      = (feedbackParam != nullptr) ? feedbackParam->load() : 0.16f;
     params.fbTone        = (fbToneParam != nullptr) ? fbToneParam->load() : 0.5f;
-    params.grainSizeMs   = (grainSizeParam != nullptr) ? grainSizeParam->load() : 120.0f;
-    params.densityHz     = (densityParam != nullptr) ? densityParam->load() : 10.0f;
-    params.scatter       = (scatterParam != nullptr) ? scatterParam->load() : 0.2f;
+    params.grainSizeMs   = (grainSizeParam != nullptr) ? grainSizeParam->load() : 160.0f;
+    params.densityHz     = (densityParam != nullptr) ? densityParam->load() : 14.0f;
+    params.scatter       = (scatterParam != nullptr) ? scatterParam->load() : 0.35f;
     params.reverseAmt    = (reverseAmtParam != nullptr) ? reverseAmtParam->load() : 0.0f;
     params.pitchSt       = (pitchParam != nullptr) ? pitchParam->load() : 0.0f;
     params.pitchRand     = (pitchRandParam != nullptr) ? pitchRandParam->load() : 0.0f;
