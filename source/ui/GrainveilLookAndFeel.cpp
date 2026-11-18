@@ -89,6 +89,8 @@ void GrainveilLookAndFeel::drawTextEditorOutline(juce::Graphics& g, int width, i
     g.drawRoundedRectangle(0.5f, 0.5f, static_cast<float>(width) - 1.0f, static_cast<float>(height) - 1.0f, 3.0f, 1.0f);
 }
 
+// STATIC: shadow, recess, ticks, track, value-arc geometry and top light.
+// ROTATED: cap, radial grooves and indicator only; the slider position drives both groups.
 void GrainveilLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height,
                                             float position, float start, float end, juce::Slider& slider)
 {
@@ -143,16 +145,31 @@ void GrainveilLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int
         g.drawEllipse(localCap.reduced(0.5f), 1.0f);
         g.setColour(juce::Colour(0xff181b1a));
         g.drawEllipse(localCap.reduced(cap * 0.15f), 1.0f);
-        // Off-centre cap detail makes rotation visible independently of the notch.
-        g.setColour(juce::Colours::black.withAlpha(0.23f));
-        g.drawLine(-cap * 0.34f, cap * 0.34f, cap * 0.28f, cap * 0.52f, 1.2f);
-        g.setColour(active ? Palette::warmBright : Palette::warm);
-        g.drawLine(0.0f, -cap * 0.38f, 0.0f, -cap * 0.77f, 2.7f);
+        // Three radial machined grooves turn with the cap, independent of the pointer.
+        constexpr float pi = juce::MathConstants<float>::pi;
+        for (float grooveAngle : { pi * 0.64f, pi, pi * 1.36f })
+        {
+            const float sx = std::sin(grooveAngle), sy = -std::cos(grooveAngle);
+            const float tx = -sy, ty = sx;
+            g.setColour(juce::Colours::black.withAlpha(0.65f));
+            g.drawLine(sx * cap * 0.53f, sy * cap * 0.53f,
+                       sx * cap * 0.78f, sy * cap * 0.78f, 2.0f);
+            g.setColour(juce::Colours::white.withAlpha(0.23f));
+            g.drawLine(sx * cap * 0.53f + tx * 1.4f, sy * cap * 0.53f + ty * 1.4f,
+                       sx * cap * 0.78f + tx * 1.4f, sy * cap * 0.78f + ty * 1.4f, 0.8f);
+        }
+        // A dark outline keeps the bright notch legible on both cap tones.
+        g.setColour(juce::Colours::black.withAlpha(0.8f));
+        g.drawLine(0.0f, -cap * 0.35f, 0.0f, -cap * 0.79f, 5.0f);
+        g.setColour(active ? juce::Colour(0xfffff0ad) : juce::Colour(0xffffe1a0));
+        g.drawLine(0.0f, -cap * 0.35f, 0.0f, -cap * 0.79f, 3.0f);
     }
 
     // A separate, stationary overhead highlight, not part of the rotating cap.
-    g.setColour(juce::Colours::white.withAlpha(0.10f));
-    g.drawEllipse(capBounds.reduced(cap * 0.22f).withTrimmedBottom(cap * 0.55f), 0.7f);
+    juce::Path overhead;
+    overhead.addCentredArc(cx, cy, cap * 0.88f, cap * 0.88f, 0.0f, -0.70f, 0.70f, true);
+    g.setColour(juce::Colours::white.withAlpha(0.25f));
+    g.strokePath(overhead, juce::PathStrokeType(1.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 }
 
 void GrainveilLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height, bool down,

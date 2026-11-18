@@ -25,11 +25,12 @@ bool saveComponent(juce::Component& component, const juce::File& file, float dpi
     return png.writeImageToStream(image, *stream);
 }
 
-// Exercise the actual slider paint path, including JUCE's rotary bounds and
-// editable value box, at both endpoints and halfway. No host mouse is needed.
-bool checkKnobPainting(juce::Slider& slider)
+// Simulate host parameter changes through the real attachment, then exercise
+// the actual slider paint path at both endpoints and halfway.
+bool checkKnobPainting(juce::Slider& slider, juce::RangedAudioParameter& parameter)
 {
-    const auto original = slider.getValue();
+    const auto original = parameter.getValue();
+    bool parameterSynced = true;
     const auto bounds = slider.getLookAndFeel().getSliderLayout(slider).sliderBounds.toFloat();
     const float cx = bounds.getCentreX(), cy = bounds.getCentreY();
     const float radius = juce::jmax(1.0f, juce::jmin(bounds.getWidth(), bounds.getHeight()) * .5f - 9.0f);
@@ -37,13 +38,15 @@ bool checkKnobPainting(juce::Slider& slider)
     const auto angles = slider.getRotaryParameters();
     auto imageAt = [&](double proportion)
     {
-        slider.setValue(slider.proportionOfLengthToValue(proportion), juce::sendNotificationSync);
+        parameter.setValueNotifyingHost(static_cast<float>(proportion));
+        parameterSynced = parameterSynced &&
+            std::abs(slider.valueToProportionOfLength(slider.getValue()) - proportion) < .005;
         juce::Image image(juce::Image::ARGB, slider.getWidth(), slider.getHeight(), true);
         { juce::Graphics graphics(image); slider.paintEntireComponent(graphics, true); }
         return image;
     };
     const auto low = imageAt(0.0), mid = imageAt(0.5), high = imageAt(1.0);
-    slider.setValue(original, juce::sendNotificationSync);
+    parameter.setValueNotifyingHost(original);
 
     auto isWarm = [](juce::Colour c)
     {
@@ -59,6 +62,10 @@ bool checkKnobPainting(juce::Slider& slider)
         return false;
     };
     bool ok = true;
+    if (! parameterSynced)
+    {
+        std::cerr << slider.getTitle() << ": parameter update did not reach slider\n"; ok = false;
+    }
     if (std::abs(cy - slider.getHeight() * .5f) < 1.0f)
     {
         std::cerr << slider.getTitle() << ": rotary centre unexpectedly includes the value box\n"; ok = false;
@@ -80,6 +87,36 @@ bool checkKnobPainting(juce::Slider& slider)
     {
         std::cerr << slider.getTitle() << ": value arc did not grow along the fixed track\n"; ok = false;
     }
+    // Check groove contrast at the expected cap-local directions in two
+    // rotated states, excluding the pointer and the stationary top light.
+    auto grooveCount = [&](const juce::Image& image, float capAngle)
+    {
+        auto luminance = [&](float px, float py)
+        {
+            const int x = juce::roundToInt(px), y = juce::roundToInt(py);
+            float sum = 0;
+            for (int dy = -1; dy <= 1; ++dy) for (int dx = -1; dx <= 1; ++dx)
+            {
+                const auto c = image.getPixelAt(x + dx, y + dy);
+                sum += (c.getRed() + c.getGreen() + c.getBlue()) / 3.0f;
+            }
+            return sum / 9.0f;
+        };
+        int count = 0;
+        constexpr float pi = juce::MathConstants<float>::pi;
+        for (float groove : { pi * .64f, pi, pi * 1.36f })
+        {
+            const float a = capAngle + groove, sx = std::sin(a), sy = -std::cos(a);
+            const float x = cx + sx * cap * .65f, y = cy + sy * cap * .65f;
+            const float tx = -sy * 5.0f, ty = sx * 5.0f;
+            if (luminance(x, y) + 3.0f < std::min(luminance(x + tx, y + ty), luminance(x - tx, y - ty))) ++count;
+        }
+        return count;
+    };
+    if (grooveCount(low, start) < 2 || grooveCount(mid, (start + end) * .5f) < 2)
+    {
+        std::cerr << slider.getTitle() << ": cap grooves did not rotate with the value\n"; ok = false;
+    }
     int tickPixels = 0, capChanges = 0;
     for (int y = 0; y < slider.getHeight(); ++y) for (int x = 0; x < slider.getWidth(); ++x)
     {
@@ -99,6 +136,30 @@ bool checkKnobPainting(juce::Slider& slider)
     {
         std::cerr << slider.getTitle() << ": missing static tick ink or rotating cap detail\n"; ok = false;
     }
+    return ok;
+}
+
+// JUCE's parameter attachment configures the double-click default. Exercise
+// the real slider handler and confirm it sends the reset through the attachment.
+bool checkKnobReset(juce::Slider& slider, juce::RangedAudioParameter& parameter)
+{
+    const float original = parameter.getValue();
+    const float defaultValue = parameter.getDefaultValue();
+    if (! slider.isDoubleClickReturnEnabled())
+    {
+        std::cerr << slider.getTitle() << ": double-click reset disabled\n"; return false;
+    }
+    parameter.setValueNotifyingHost(defaultValue < .5f ? 1.0f : 0.0f);
+    const auto centre = slider.getLookAndFeel().getSliderLayout(slider).sliderBounds.toFloat().getCentre();
+    const auto now = juce::Time::getCurrentTime();
+    const juce::MouseEvent event(juce::Desktop::getInstance().getMainMouseSource(), centre,
+                                 juce::ModifierKeys(juce::ModifierKeys::leftButtonModifier),
+                                 1.0f, 0, 0, 0, 0, &slider, &slider, now, centre, now, 2, false);
+    slider.mouseDoubleClick(event);
+    const bool ok = std::abs(parameter.getValue() - defaultValue) < .002f &&
+                    std::abs(slider.valueToProportionOfLength(slider.getValue()) - defaultValue) < .002;
+    if (! ok) std::cerr << slider.getTitle() << ": double-click did not reset parameter\n";
+    parameter.setValueNotifyingHost(original);
     return ok;
 }
 
@@ -186,15 +247,31 @@ int main(int argc, char** argv)
         return 1;
     }
     if (! checkPeers(*presetBar, juce::AffineTransform(), presetBar->getLocalBounds().toFloat(), "preset bar")) return 1;
-    int checkedKnobs = 0;
+    struct KnobParam { const char* title; const char* id; };
+    const KnobParam knobParams[] = {
+        { "MIX", GrainveilParams::mix }, { "SIZE", GrainveilParams::grainSize },
+        { "DENSITY", GrainveilParams::density }, { "SCATTER", GrainveilParams::scatter },
+        { "FEEDBACK", GrainveilParams::feedback }, { "PITCH", GrainveilParams::pitch },
+        { "CAPTURE", GrainveilParams::captureTime }, { "TONE", GrainveilParams::tone },
+        { "REVERSE", GrainveilParams::reverseAmt }, { "SPREAD", GrainveilParams::spread }
+    };
+    int checkedPaint = 0, checkedReset = 0;
     for (auto* child : surface->getChildren())
         if (auto* slider = dynamic_cast<juce::Slider*>(child))
-            if (slider->getTitle() == "MIX" || slider->getTitle() == "CAPTURE")
-            {
-                if (! checkKnobPainting(*slider)) return 1;
-                ++checkedKnobs;
-            }
-    if (checkedKnobs != 2) { std::cerr << "Missing large or small knob paint fixture\n"; return 1; }
+            for (const auto& knob : knobParams)
+                if (slider->getTitle() == knob.title)
+                {
+                    auto* parameter = processor.getAPVTS().getParameter(knob.id);
+                    if (parameter == nullptr || ! checkKnobReset(*slider, *parameter)) return 1;
+                    ++checkedReset;
+                    if (slider->getTitle() == "MIX" || slider->getTitle() == "CAPTURE")
+                    {
+                        if (! checkKnobPainting(*slider, *parameter)) return 1;
+                        ++checkedPaint;
+                    }
+                }
+    if (checkedPaint != 2 || checkedReset != 10)
+    { std::cerr << "Missing knob paint or double-click reset fixtures\n"; return 1; }
     for (auto* child : surface->getChildren())
         if (auto* slider = dynamic_cast<juce::Slider*>(child))
             for (auto* part : slider->getChildren())
