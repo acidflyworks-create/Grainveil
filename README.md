@@ -100,6 +100,22 @@ when upgrading. Version-1 user preset and session-baseline values are migrated t
 preserve their physical grain-size setting; sound itself will differ because the
 DSP mapping changed. New preset/session metadata uses version 2.
 
+### Envelopes and feedback (S2)
+
+Cloud, Smear and IceHold use Hann windows for forward grains. EchoGrain, Fracture
+and Ash use flat-topped windows with 1 ms edges; reversed grains use 3 ms edges,
+shortened when a grain is too short to accommodate both. Voice steals use a
+64-sample held-output fade; frozen grains loop the selected capture window with an
+up-to-128-sample seam crossfade and 64-sample freeze-transition fades. Capture writes
+remain disabled in Freeze: feed audio first. The bounded 32-voice pool is unchanged.
+
+Wet makeup compensates for grain-window power, and the wet and feedback paths have
+15 Hz DC blockers and tanh limiting. Feedback tone ranges from dark filtering to
+boosted highs. **High feedback can build up and self-sustain even after input stops**;
+start monitoring quietly and lower Feedback or stop/reset the instance if needed.
+Automated signal tests cover representative levels and tails, not every source or a
+proof of click-free operation; audition and host CPU checks are still needed.
+
 The [factory preset table](docs/FACTORY_PRESETS.md) lists all 45 programs, their modes and
 key values. Their complete 19-parameter data is maintained in `presets/factory-v2.csv`;
 run `python tools/generate_factory_presets.py` after editing it and `--check` to validate.

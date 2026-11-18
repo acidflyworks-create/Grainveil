@@ -129,6 +129,10 @@ if(GRAINVEIL_BUILD_UI_TESTS)
     target_include_directories(GrainveilSchedulerTests PRIVATE source)
     add_test(NAME GrainveilScheduler COMMAND GrainveilSchedulerTests)
 
+    add_executable(GrainveilVoiceTests tests/GrainVoiceTests.cpp)
+    target_include_directories(GrainveilVoiceTests PRIVATE source)
+    add_test(NAME GrainveilVoice COMMAND GrainveilVoiceTests)
+
     juce_add_console_app(GrainveilSoundTests PRODUCT_NAME "Grainveil Sound Tests")
     target_sources(GrainveilSoundTests PRIVATE tests/SoundTests.cpp)
     target_include_directories(GrainveilSoundTests PRIVATE source)

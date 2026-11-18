@@ -56,6 +56,8 @@ namespace GrainveilDsp
             wetToneFilter.prepare(spec);
             wetToneFilter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
             wetToneFilter.setResonance(0.7071f);
+            feedbackDc.prepare(sampleRate);
+            wetDc.prepare(sampleRate);
 
             smoothedMix.reset(sampleRate, 0.02);
             smoothedInGain.reset(sampleRate, 0.02);
@@ -81,6 +83,8 @@ namespace GrainveilDsp
             scheduler.reset();
             fbFilter.reset();
             wetToneFilter.reset();
+            feedbackDc.reset();
+            wetDc.reset();
             prevWetL = 0.0f;
             prevWetR = 0.0f;
             samplesUntilTelemetry = 0;
@@ -88,24 +92,27 @@ namespace GrainveilDsp
 
         void process(juce::AudioBuffer<float>& buffer, const EngineParams& params) noexcept
         {
+            juce::ScopedNoDenormals noDenormals;
             const int numSamples = buffer.getNumSamples();
             if (numSamples <= 0 || buffer.getNumChannels() < 2)
                 return;
 
-            smoothedMix.setTargetValue(params.mix);
-            smoothedInGain.setTargetValue(juce::Decibels::decibelsToGain(params.inGainDb));
-            smoothedOutGain.setTargetValue(juce::Decibels::decibelsToGain(params.outGainDb));
-            smoothedCaptureMs.setTargetValue(params.captureTimeMs);
-            smoothedFeedback.setTargetValue(std::clamp(params.feedback, 0.0f, 0.95f));
-            smoothedFbTone.setTargetValue(std::clamp(params.fbTone, 0.0f, 1.0f));
-            smoothedGrainSizeMs.setTargetValue(params.grainSizeMs);
-            smoothedDensityHz.setTargetValue(params.densityHz);
-            smoothedPitchSt.setTargetValue(params.pitchSt);
-            smoothedScatter.setTargetValue(std::clamp(params.scatter, 0.0f, 1.0f));
-            smoothedPitchRand.setTargetValue(std::clamp(params.pitchRand, 0.0f, 1.0f));
-            smoothedReverse.setTargetValue(std::clamp(params.reverseAmt, 0.0f, 1.0f));
-            smoothedSpread.setTargetValue(std::clamp(params.spread, 0.0f, 1.0f));
-            smoothedTone.setTargetValue(std::clamp(params.tone, 0.0f, 1.0f));
+            auto safe = [](float v, float fallback, float lo, float hi) noexcept
+            { return std::clamp(std::isfinite(v) ? v : fallback, lo, hi); };
+            smoothedMix.setTargetValue(safe(params.mix, .6f, 0.0f, 1.0f));
+            smoothedInGain.setTargetValue(juce::Decibels::decibelsToGain(safe(params.inGainDb, 0, -24, 12)));
+            smoothedOutGain.setTargetValue(juce::Decibels::decibelsToGain(safe(params.outGainDb, 0, -24, 12)));
+            smoothedCaptureMs.setTargetValue(safe(params.captureTimeMs, 1000, 50, 4000));
+            smoothedFeedback.setTargetValue(safe(params.feedback, 0, 0, .95f));
+            smoothedFbTone.setTargetValue(safe(params.fbTone, .5f, 0, 1));
+            smoothedGrainSizeMs.setTargetValue(safe(params.grainSizeMs, 120, 5, 1200));
+            smoothedDensityHz.setTargetValue(safe(params.densityHz, 10, 1, 40));
+            smoothedPitchSt.setTargetValue(safe(params.pitchSt, 0, -24, 24));
+            smoothedScatter.setTargetValue(safe(params.scatter, 0, 0, 1));
+            smoothedPitchRand.setTargetValue(safe(params.pitchRand, 0, 0, 1));
+            smoothedReverse.setTargetValue(safe(params.reverseAmt, 0, 0, 1));
+            smoothedSpread.setTargetValue(safe(params.spread, .5f, 0, 1));
+            smoothedTone.setTargetValue(safe(params.tone, .7f, 0, 1));
 
             auto* left  = buffer.getWritePointer(0);
             auto* right = buffer.getWritePointer(1);
@@ -130,18 +137,26 @@ namespace GrainveilDsp
                 const float spread     = smoothedSpread.getNextValue();
                 const float toneVal    = smoothedTone.getNextValue();
 
-                const float dryL = left[i];
-                const float dryR = right[i];
+                // Bound extreme finite host input as well as NaN/Inf before it
+                // can poison the capture buffer or filter state.
+                const float dryL = std::clamp(sanitize(left[i]), -32.0f, 32.0f);
+                const float dryR = std::clamp(sanitize(right[i]), -32.0f, 32.0f);
 
                 // Feedback vs Freeze interaction:
                 // When freeze is active, CircularBuffer::writeSample() halts all writes
                 // (both live input and feedback recirculation) so the frozen buffer contents
                 // remain completely intact and never overwrite or bloom out of control.
-                const float fbCutoff = std::min(maxCutoff, 400.0f * std::pow(40.0f, fbToneVal));
+                const float fbCutoff = std::min(maxCutoff, 400.0f * std::pow(7.5f, std::min(1.0f, fbToneVal * 2.0f)));
                 fbFilter.setCutoffFrequency(fbCutoff);
-
-                const float fbL = std::tanh(fbFilter.processSample(0, sanitize(prevWetL)) * 0.85f) * fbAmount;
-                const float fbR = std::tanh(fbFilter.processSample(1, sanitize(prevWetR)) * 0.85f) * fbAmount;
+                const float fbLowL = fbFilter.processSample(0, sanitize(prevWetL));
+                const float fbLowR = fbFilter.processSample(1, sanitize(prevWetR));
+                const float fbHighGain = 2.5f * std::max(0.0f, fbToneVal * 2.0f - 1.0f);
+                const float colourL = fbLowL + fbHighGain * (sanitize(prevWetL) - fbLowL);
+                const float colourR = fbLowR + fbHighGain * (sanitize(prevWetR) - fbLowR);
+                // 2x drive makes the upper feedback range capable of blooming;
+                // both clip stages bound the loop even when it self-oscillates.
+                const float fbL = std::tanh(feedbackDc.process(0, std::tanh(2.0f * sanitize(colourL)))) * fbAmount;
+                const float fbR = std::tanh(feedbackDc.process(1, std::tanh(2.0f * sanitize(colourR)))) * fbAmount;
 
                 circularBuffer.writeSample(dryL * inGain + fbL, dryR * inGain + fbR, params.freeze);
 
@@ -158,7 +173,8 @@ namespace GrainveilDsp
                                         pitchRand,
                                         spread,
                                         wetL,
-                                        wetR);
+                                        wetR,
+                                        params.freeze);
 
                 // Lower half sweeps a dark low-pass; upper half adds a high
                 // shelf, so the bright end can be genuinely aggressive.
@@ -167,8 +183,10 @@ namespace GrainveilDsp
                 const float lowL = wetToneFilter.processSample(0, sanitize(wetL));
                 const float lowR = wetToneFilter.processSample(1, sanitize(wetR));
                 const float highs = 3.0f * std::max(0.0f, toneVal * 2.0f - 1.0f);
-                wetL = std::tanh(lowL + highs * (sanitize(wetL) - lowL));
-                wetR = std::tanh(lowR + highs * (sanitize(wetR) - lowR));
+                const float colouredL = sanitize(lowL + highs * (sanitize(wetL) - lowL));
+                const float colouredR = sanitize(lowR + highs * (sanitize(wetR) - lowR));
+                wetL = std::tanh(wetDc.process(0, colouredL));
+                wetR = std::tanh(wetDc.process(1, colouredR));
 
                 prevWetL = wetL;
                 prevWetR = wetR;
@@ -192,6 +210,27 @@ namespace GrainveilDsp
         }
 
     private:
+        struct DcBlocker
+        {
+            void prepare(double rate) noexcept
+            {
+                coefficient = static_cast<float>(std::exp(-2.0 * 3.14159265358979323846 * 15.0 / rate));
+                reset();
+            }
+            void reset() noexcept { previousInput.fill(0.0f); previousOutput.fill(0.0f); }
+            float process(size_t channel, float input) noexcept
+            {
+                input = std::isfinite(input) ? input : 0.0f;
+                float output = input - previousInput[channel] + coefficient * previousOutput[channel];
+                if (! std::isfinite(output) || std::abs(output) < 1.0e-20f) output = 0.0f;
+                previousInput[channel] = input;
+                previousOutput[channel] = output;
+                return output;
+            }
+            std::array<float, 2> previousInput {}, previousOutput {};
+            float coefficient = 0.0f;
+        };
+
         void updateTelemetry(bool frozen, int mode) noexcept
         {
             TelemetrySnapshot telemetry;
@@ -243,6 +282,7 @@ namespace GrainveilDsp
         GrainScheduler scheduler;
         juce::dsp::StateVariableTPTFilter<float> fbFilter;
         juce::dsp::StateVariableTPTFilter<float> wetToneFilter;
+        DcBlocker feedbackDc, wetDc;
 
         double sampleRate = 44100.0;
         float prevWetL = 0.0f;

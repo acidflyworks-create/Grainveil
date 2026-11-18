@@ -70,6 +70,7 @@ int main()
                         const double offset = (buffer.getWritePos() - voice.startPos) / sr;
                         lo = std::min(lo, offset); hi = std::max(hi, offset);
                         check(voice.reverse, "100% reverse must reverse every new grain", mode);
+                        check(voice.windowType == GrainveilDsp::GrainVoice::Window::edge, "reverse grain uses edge-only envelope", mode);
                         const bool hardLeft = voice.panR == 0.0f && voice.crossR == 0.0f;
                         const bool hardRight = voice.panL == 0.0f && voice.crossL == 0.0f;
                         check(hardLeft || hardRight, "maximum spread must hard-pan", mode);
@@ -94,6 +95,20 @@ int main()
             }
             else
                 check(lo < .05 && hi > .95, "maximum scatter spans capture window", mode);
+        }
+    }
+
+    for (int mode : { 0, 1, 3, 4, 5, 6, 7 })
+    {
+        GrainveilDsp::GrainScheduler scheduler;
+        scheduler.prepare(sr);
+        float l = 0, r = 0;
+        scheduler.processSample(buffer, mode, 1000, 100, 1, 0, 0, 0, 0, 0, l, r);
+        for (const auto& grain : scheduler.getVoices()) if (grain.active)
+        {
+            const bool edge = mode == 1 || mode == 4 || mode == 7;
+            check(grain.windowType == (edge ? GrainveilDsp::GrainVoice::Window::edge : GrainveilDsp::GrainVoice::Window::hann),
+                  "mode window selection", mode);
         }
     }
 

@@ -1,5 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <algorithm>
+#include <cmath>
 
 GrainveilAudioProcessor::GrainveilAudioProcessor(juce::File presetDirectory)
     : AudioProcessor(BusesProperties()
@@ -87,7 +89,8 @@ void GrainveilAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juc
     params.pitchRand     = (pitchRandParam != nullptr) ? pitchRandParam->load() : 0.0f;
     params.spread        = (spreadParam != nullptr) ? spreadParam->load() : 0.5f;
     params.tone          = (toneParam != nullptr) ? toneParam->load() : 0.7f;
-    params.mode          = (modeParam != nullptr) ? static_cast<int>(modeParam->load() + 0.5f) : 0;
+    const float modeValue = (modeParam != nullptr) ? modeParam->load() : 0.0f;
+    params.mode          = std::isfinite(modeValue) ? static_cast<int>(std::clamp(modeValue, 0.0f, 7.0f) + 0.5f) : 0;
 
     grainEngine.process(buffer, params);
 }

@@ -23,7 +23,7 @@ namespace GrainveilDsp
         void reset() noexcept
         {
             for (auto& v : voices)
-                v.active = false;
+                v = GrainVoice {};
 
             samplesUntilNextGrain = 0.0;
             ageCounter = 0;
@@ -40,7 +40,8 @@ namespace GrainveilDsp
                            float pitchRand,
                            float spread,
                            float& wetL,
-                           float& wetR) noexcept
+                           float& wetR,
+                           bool frozen = false) noexcept
         {
             // Keep the existing 1..40 parameter/automation range, but map it to
             // overlap rather than an absolute Hz rate. The old mode density
@@ -85,10 +86,12 @@ namespace GrainveilDsp
             wetL = 0.0f;
             wetR = 0.0f;
 
+            const double captureSamples = std::clamp(captureTimeMs * 0.001 * sampleRate, 32.0,
+                                                      static_cast<double>(buffer.getBufferSize() - 8));
             for (auto& v : voices)
             {
-                if (v.active)
-                    v.processSample(buffer, wetL, wetR);
+                if (v.isRendering())
+                    v.processSample(buffer, wetL, wetR, frozen, captureSamples);
             }
         }
 
@@ -202,9 +205,13 @@ namespace GrainveilDsp
             const float pan = (nextRandomUnipolar() < 0.5f ? -1.0f : 1.0f) * std::clamp(spread, 0.0f, 1.0f);
 
             const double overlap = std::clamp(effDensity * (grainSamples / sampleRate), 1.0, static_cast<double>(poolSize));
-            const float amp      = 1.0f / std::sqrt(static_cast<float>(overlap));
-
-            target->trigger(startPos, grainSamples, rate, isReverse, isLofi, pan, amp, ++ageCounter);
+            const bool shortEdges = isReverse || modeIndex == 1 || modeIndex == 4 || modeIndex == 7;
+            // Hann averages less power than a short-edge window. Makeup is
+            // bounded and followed by wet/feedback saturation in the engine.
+            const float amp = (shortEdges ? 1.5f : 2.2f) / std::sqrt(static_cast<float>(overlap));
+            const auto window = shortEdges ? GrainVoice::Window::edge : GrainVoice::Window::hann;
+            const double edgeSamples = sampleRate * (isReverse ? 0.003 : 0.001);
+            target->trigger(startPos, grainSamples, rate, isReverse, isLofi, pan, amp, ++ageCounter, window, edgeSamples);
         }
 
         float nextRandomUnipolar() noexcept
